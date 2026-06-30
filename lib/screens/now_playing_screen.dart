@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../theme.dart';
 import '../widgets/procedural_album_art.dart';
+import '../widgets/add_to_album_sheet.dart';
 
 class NowPlayingScreen extends StatelessWidget {
   const NowPlayingScreen({super.key});
@@ -30,19 +31,21 @@ class NowPlayingScreen extends StatelessWidget {
         final track = state.currentTrack;
         final isPlaying = state.isPlaying;
 
-        return SafeArea(
-          child: Column(
-            children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textPrimary, size: 32),
-                      onPressed: () => state.changeTab(0), // Go back home
-                    ),
+        return Scaffold(
+          backgroundColor: AppTheme.darkBackground,
+          body: SafeArea(
+            child: Column(
+              children: [
+                // Header
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textPrimary, size: 32),
+                        onPressed: () => Navigator.pop(context),
+                      ),
                     const Text(
                       "Now Playing",
                       style: TextStyle(
@@ -110,11 +113,10 @@ class NowPlayingScreen extends StatelessWidget {
                     ),
                     IconButton(
                       iconSize: 28,
-                      icon: Icon(
-                        track.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                        color: track.isFavorite ? AppTheme.primaryYellow : AppTheme.textSecondary,
-                      ),
-                      onPressed: () => state.toggleFavorite(track),
+                      icon: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.textSecondary),
+                      onPressed: () {
+                        showAddToAlbumSheet(context, track, state);
+                      },
                     ),
                   ],
                 ),
@@ -212,7 +214,8 @@ class NowPlayingScreen extends StatelessWidget {
               const SizedBox(height: 32),
             ],
           ),
-        );
+        ),
+      );
       },
     );
   }

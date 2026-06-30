@@ -4,7 +4,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:jiosaavn/jiosaavn.dart';
 import '../models/track.dart';
 import 'dart:async';
@@ -14,6 +14,12 @@ class AppState extends ChangeNotifier {
   int currentTab = 0; // 0 = Home, 1 = Library, 2 = Now Playing
   String searchQuery = "";
   String activeFilterChip = "All Songs";
+  
+  // User Profile Data
+  String? userId;
+  String userName = "Music Lover";
+  String userHandle = "@musiclover";
+  String? userProfileImage;
   
   List<Track> songsList = [];
   List<Track> currentQueue = [];
@@ -33,9 +39,12 @@ class AppState extends ChangeNotifier {
   StreamSubscription? _playerStateSub;
   
   Duration? _currentDuration;
-  final Box _favoritesBox = Hive.box('favorites');
-  final Box _albumsBox = Hive.box('albums');
-  final Box _savedTracksBox = Hive.box('saved_tracks');
+  final _supabase = Supabase.instance.client;
+  List<String> _albumNamesCache = [];
+  Map<String, List<int>> _albumTracksCache = {};
+  
+  StreamSubscription<AuthState>? _authStateSub;
+  bool get isLoggedIn => _supabase.auth.currentUser != null;
   
   int _generateStableId(String stringId) {
     int hash = 0;
@@ -47,6 +56,14 @@ class AppState extends ChangeNotifier {
   
   AppState() {
     _initAudioStreams();
+    
+    _authStateSub = _supabase.auth.onAuthStateChange.listen((data) {
+      final AuthChangeEvent event = data.event;
+      if (event == AuthChangeEvent.signedIn || event == AuthChangeEvent.signedOut) {
+        loadSavedTracks();
+      }
+    });
+    
     requestPermissionAndFetchSongs();
   }
 
@@ -72,12 +89,48 @@ class AppState extends ChangeNotifier {
     });
   }
 
-  void _loadSavedTracks() {
+  Future<void> loadSavedTracks() async {
     try {
-      for (var value in _savedTracksBox.values) {
+      if (!isLoggedIn) {
+        userId = null;
+        userName = "Guest";
+        userHandle = "Log in to save playlists";
+        userProfileImage = null;
+        _albumNamesCache.clear();
+        _albumTracksCache.clear();
+        
+        // Remove non-local tracks from memory if they log out
+        songsList.removeWhere((track) => !track.isImported);
+        notifyListeners();
+        return;
+      }
+
+      // 1. Fetch User Data
+      final currentUser = _supabase.auth.currentUser;
+      if (currentUser != null) {
+        userId = currentUser.id;
+        userName = "Music Lover"; // Default if not found
+        userHandle = "@musiclover";
+        
         try {
-          final track = Track.fromJson(value as Map<dynamic, dynamic>);
-          track.isFavorite = _favoritesBox.get(track.id, defaultValue: false) as bool;
+          final userResponse = await _supabase.from('users').select().eq('id', currentUser.id).limit(1);
+          if (userResponse.isNotEmpty) {
+            final userData = userResponse.first;
+            userName = userData['name'] ?? userName;
+            userHandle = userData['handle'] ?? userHandle;
+            userProfileImage = userData['profile_image_url'];
+          }
+        } catch (e) {
+          print("Error fetching user data: $e");
+        }
+        notifyListeners(); // Update UI with user info immediately
+      }
+
+      // 2. Fetch saved tracks (only tracks that are in albums)
+      final tracksResponse = await _supabase.from('saved_tracks').select();
+      for (var row in tracksResponse) {
+        try {
+          final track = Track.fromJson(row);
           if (songsList.indexWhere((t) => t.id == track.id) == -1) {
              songsList.add(track);
           }
@@ -85,58 +138,94 @@ class AppState extends ChangeNotifier {
           print("Error parsing saved track: $e");
         }
       }
+      
+      // 3. Fetch albums and their tracks
+      try {
+        final albumsResponse = await _supabase.from('albums').select('name');
+        _albumNamesCache = albumsResponse.map((a) => a['name'] as String).toList();
+        
+        final albumTracksResponse = await _supabase.from('album_tracks').select();
+        _albumTracksCache.clear();
+        for (var row in albumTracksResponse) {
+          String albumName = row['album_name'];
+          int trackId = row['track_id'];
+          if (!_albumTracksCache.containsKey(albumName)) {
+             _albumTracksCache[albumName] = [];
+          }
+          _albumTracksCache[albumName]!.add(trackId);
+        }
+      } catch (e) {
+        print("Error fetching albums: $e");
+      }
+      
+    } catch (e) {
+      print("Error loading from Supabase: $e");
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateProfile(String newName, String newHandle) async {
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser == null) return;
+    
+    try {
+      await _supabase.from('users').upsert({
+        'id': currentUser.id,
+        'name': newName,
+        'handle': newHandle,
+      });
+      userName = newName;
+      userHandle = newHandle;
       notifyListeners();
     } catch (e) {
-      print("Error loading saved tracks box: $e");
+      print("Error updating profile: $e");
+      rethrow;
     }
   }
 
   Future<void> requestPermissionAndFetchSongs() async {
-    _loadSavedTracks();
+    await loadSavedTracks();
     
     try {
-    bool permissionStatus = await _audioQuery.permissionsRequest();
-    if (!permissionStatus) {
-      permissionStatus = await Permission.storage.request().isGranted;
+      bool permissionStatus = await _audioQuery.permissionsRequest();
       if (!permissionStatus) {
-        // Handle permission denied
-        return;
+        permissionStatus = await Permission.storage.request().isGranted;
+        if (!permissionStatus) {
+          // Handle permission denied
+          return;
+        }
       }
-    }
 
-    List<SongModel> songs = await _audioQuery.querySongs(
-      sortType: null,
-      orderType: OrderType.ASC_OR_SMALLER,
-      uriType: UriType.EXTERNAL,
-      ignoreCase: true,
-    );
-
-    final patterns = ['waves', 'vinyl', 'spheres', 'grid'];
-    final colors = [Colors.red, Colors.blue, Colors.green, Colors.purple, Colors.orange];
-    final random = math.Random();
-
-    final localTracks = songs.where((s) => s.isMusic == true && s.data != null).map((song) {
-      bool isFav = _favoritesBox.get(song.id, defaultValue: false) as bool;
-      return Track(
-        id: song.id,
-        title: song.title,
-        artist: song.artist ?? "Unknown Artist",
-        duration: _formatDuration(song.duration),
-        pattern: patterns[random.nextInt(patterns.length)],
-        primaryColor: colors[random.nextInt(colors.length)],
-        secondaryColor: colors[random.nextInt(colors.length)],
-        isFavorite: isFav,
-        isImported: true,
-        uri: song.data,
+      List<SongModel> songs = await _audioQuery.querySongs(
+        sortType: null,
+        orderType: OrderType.ASC_OR_SMALLER,
+        uriType: UriType.EXTERNAL,
+        ignoreCase: true,
       );
-    }).toList();
-    
-    for (var localTrack in localTracks) {
-      if (songsList.indexWhere((t) => t.id == localTrack.id) == -1) {
-        songsList.add(localTrack);
+
+      final patterns = ['waves', 'vinyl', 'spheres', 'grid'];
+      final colors = [Colors.red, Colors.blue, Colors.green, Colors.purple, Colors.orange];
+      final random = math.Random();
+      final localTracks = songs.where((s) => s.isMusic == true && s.data != null).map((song) {
+        return Track(
+          id: song.id,
+          title: song.title,
+          artist: song.artist ?? "Unknown Artist",
+          duration: _formatDuration(song.duration),
+          pattern: patterns[random.nextInt(patterns.length)],
+          primaryColor: colors[random.nextInt(colors.length)],
+          secondaryColor: colors[random.nextInt(colors.length)],
+          isImported: true,
+          uri: song.data,
+        );
+      }).toList();
+      
+      for (var localTrack in localTracks) {
+        if (songsList.indexWhere((t) => t.id == localTrack.id) == -1) {
+          songsList.add(localTrack);
+        }
       }
-    }
-    
     } catch (e) {
       print("Local songs fetch error: $e");
     }
@@ -183,53 +272,87 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
   
-  void toggleFavorite(Track track) {
-    track.isFavorite = !track.isFavorite;
-    _favoritesBox.put(track.id, track.isFavorite);
-    if (!track.isImported && track.isFavorite) {
-      _savedTracksBox.put(track.id, track.toJson());
-    }
-    notifyListeners();
-  }
-  
-  List<String> get albumNames => _albumsBox.keys.cast<String>().toList();
+  List<String> get albumNames => _albumNamesCache;
 
-  void createAlbum(String name) {
-    if (name.trim().isEmpty) return;
-    if (!_albumsBox.containsKey(name)) {
-      _albumsBox.put(name, <int>[]);
+  Future<bool> createAlbum(String name) async {
+    if (!isLoggedIn) return false;
+    
+    if (name.trim().isEmpty) return false;
+    if (!_albumNamesCache.contains(name)) {
+      _albumNamesCache.add(name);
       notifyListeners();
-    }
-  }
-
-  void deleteAlbum(String name) {
-    _albumsBox.delete(name);
-    notifyListeners();
-  }
-
-  void addTrackToAlbum(Track track, String albumName) {
-    List<int> trackIds = (_albumsBox.get(albumName, defaultValue: <int>[]) as List).cast<int>();
-    if (!trackIds.contains(track.id)) {
-      trackIds.add(track.id);
-      _albumsBox.put(albumName, trackIds);
-      if (!track.isImported) {
-        _savedTracksBox.put(track.id, track.toJson());
+      try {
+        await _supabase.from('albums').insert({
+          'name': name,
+          if (userId != null) 'user_id': userId,
+        });
+        return true;
+      } catch (e) {
+        print("Error creating album in Supabase: $e");
+        return false;
       }
+    }
+    return true;
+  }
+
+  Future<void> deleteAlbum(String name) async {
+    if (_albumNamesCache.contains(name)) {
+      _albumNamesCache.remove(name);
       notifyListeners();
+      try {
+        await _supabase.from('albums').delete().eq('name', name);
+      } catch (e) {
+        print("Error deleting album: $e");
+      }
     }
   }
 
-  void removeTrackFromAlbum(Track track, String albumName) {
-    List<int> trackIds = (_albumsBox.get(albumName, defaultValue: <int>[]) as List).cast<int>();
-    if (trackIds.contains(track.id)) {
-      trackIds.remove(track.id);
-      _albumsBox.put(albumName, trackIds);
+  Future<bool> addTrackToAlbum(Track track, String albumName) async {
+    if (!isLoggedIn) return false;
+    
+    if (!_albumTracksCache.containsKey(albumName)) {
+      _albumTracksCache[albumName] = [];
+    }
+    if (!_albumTracksCache[albumName]!.contains(track.id)) {
+      _albumTracksCache[albumName]!.add(track.id);
       notifyListeners();
+      try {
+        // Must insert into saved_tracks first to satisfy foreign key constraint in album_tracks
+        final trackJson = track.toJson();
+        await _supabase.from('saved_tracks').upsert(trackJson);
+        
+        await _supabase.from('album_tracks').upsert({
+          'album_name': albumName,
+          'track_id': track.id
+        });
+        return true;
+      } catch (e) {
+        print("Error adding track to album: $e");
+        _albumTracksCache[albumName]!.remove(track.id);
+        notifyListeners();
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Future<void> removeTrackFromAlbum(Track track, String albumName) async {
+    if (_albumTracksCache.containsKey(albumName) && _albumTracksCache[albumName]!.contains(track.id)) {
+      _albumTracksCache[albumName]!.remove(track.id);
+      notifyListeners();
+      try {
+        await _supabase.from('album_tracks')
+            .delete()
+            .eq('album_name', albumName)
+            .eq('track_id', track.id);
+      } catch (e) {
+        print("Error removing track from album: $e");
+      }
     }
   }
 
   List<Track> getTracksForAlbum(String albumName) {
-    List<int> trackIds = (_albumsBox.get(albumName, defaultValue: <int>[]) as List).cast<int>();
+    List<int> trackIds = _albumTracksCache[albumName] ?? [];
     return songsList.where((track) => trackIds.contains(track.id)).toList();
   }
   
@@ -244,7 +367,6 @@ class AppState extends ChangeNotifier {
         
         final List<Track> tracks = [];
         final patterns = ['waves', 'vinyl', 'spheres', 'grid'];
-        final colors = [Colors.red, Colors.blue, Colors.green, Colors.purple, Colors.orange];
         final random = math.Random();
         
         for (var song in detailedSongs) {
@@ -272,9 +394,8 @@ class AppState extends ChangeNotifier {
             artist: artistName,
             duration: _formatDuration(durationSeconds * 1000),
             pattern: patterns[random.nextInt(patterns.length)],
-            primaryColor: colors[random.nextInt(colors.length)],
-            secondaryColor: colors[random.nextInt(colors.length)],
-            isFavorite: false,
+            primaryColor: const Color(0xFFE91E63),
+            secondaryColor: const Color(0xFFF48FB1),
             isImported: false,
             uri: streamUrl, // Direct Stream URL!
             thumbnailUrl: imageUrl,
@@ -427,11 +548,8 @@ class AppState extends ChangeNotifier {
     _positionSub?.cancel();
     _durationSub?.cancel();
     _playerStateSub?.cancel();
+    _authStateSub?.cancel();
     audioPlayer.dispose();
     super.dispose();
   }
 }
-
-
-
-

@@ -6,6 +6,7 @@ import '../theme.dart';
 import '../widgets/procedural_album_art.dart';
 import '../widgets/add_to_album_sheet.dart';
 import 'album_detail_screen.dart';
+import 'auth_screen.dart';
 
 class LibraryScreen extends StatelessWidget {
   const LibraryScreen({super.key});
@@ -17,9 +18,7 @@ class LibraryScreen extends StatelessWidget {
         List<Track> displayList = state.songsList;
         
         // Filter by active chip
-        if (state.activeFilterChip == 'Favorites') {
-          displayList = displayList.where((t) => t.isFavorite).toList();
-        } else if (state.activeFilterChip == 'Imported') {
+        if (state.activeFilterChip == 'Imported') {
           displayList = displayList.where((t) => t.isImported).toList();
         }
         
@@ -85,7 +84,7 @@ class LibraryScreen extends StatelessWidget {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
-                  children: ['All Songs', 'Favorites', 'Albums'].map((chip) {
+                  children: ['All Songs', 'Albums'].map((chip) {
                     final isSelected = state.activeFilterChip == chip;
                     return Padding(
                       padding: const EdgeInsets.only(right: 8.0),
@@ -116,6 +115,11 @@ class LibraryScreen extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: ElevatedButton.icon(
                     onPressed: () {
+                      if (!state.isLoggedIn) {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthScreen()));
+                        return;
+                      }
+                      
                       String newAlbumName = "";
                       showDialog(
                         context: context,
@@ -137,9 +141,11 @@ class LibraryScreen extends StatelessWidget {
                               child: const Text("Cancel", style: TextStyle(color: AppTheme.textSecondary)),
                             ),
                             TextButton(
-                              onPressed: () {
-                                state.createAlbum(newAlbumName);
-                                Navigator.pop(context);
+                              onPressed: () async {
+                                final success = await state.createAlbum(newAlbumName);
+                                if (success && context.mounted) {
+                                  Navigator.pop(context);
+                                }
                               },
                               child: const Text("Create", style: TextStyle(color: AppTheme.primaryYellow)),
                             ),
@@ -267,18 +273,19 @@ class LibraryScreen extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              trailing: IconButton(
-                                icon: Icon(
-                                  track.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                  color: track.isFavorite ? AppTheme.primaryYellow : AppTheme.textSecondary,
-                                ),
-                                onPressed: () => state.toggleFavorite(track),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.textSecondary),
+                                    onPressed: () {
+                                      showAddToAlbumSheet(context, track, state);
+                                    },
+                                  ),
+                                ],
                               ),
                               onTap: () {
                                 state.playFromQueue(displayList, track);
-                              },
-                              onLongPress: () {
-                                showAddToAlbumSheet(context, track, state);
                               },
                             ),
                           );

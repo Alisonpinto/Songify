@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../theme.dart';
 import '../widgets/procedural_album_art.dart';
+import '../screens/now_playing_screen.dart';
 
 class MiniPlayer extends StatelessWidget {
   const MiniPlayer({super.key});
@@ -15,7 +16,12 @@ class MiniPlayer extends StatelessWidget {
         final isPlaying = state.isPlaying;
 
         return GestureDetector(
-          onTap: () => state.changeTab(2), // Navigate to Now Playing
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const NowPlayingScreen()),
+            );
+          },
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
@@ -78,13 +84,7 @@ class MiniPlayer extends StatelessWidget {
                           ],
                         ),
                       ),
-                      IconButton(
-                        icon: Icon(
-                          track.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                          color: track.isFavorite ? AppTheme.primaryYellow : AppTheme.textSecondary,
-                        ),
-                        onPressed: () => state.toggleFavorite(track),
-                      ),
+                      const SizedBox(width: 8),
                       GestureDetector(
                         onTap: () => state.togglePlayPause(),
                         child: Container(

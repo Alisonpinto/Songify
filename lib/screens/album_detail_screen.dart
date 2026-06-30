@@ -105,13 +105,6 @@ class AlbumDetailScreen extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
-                        icon: Icon(
-                          track.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                          color: track.isFavorite ? AppTheme.primaryYellow : AppTheme.textSecondary,
-                        ),
-                        onPressed: () => state.toggleFavorite(track),
-                      ),
-                      IconButton(
                         icon: const Icon(Icons.remove_circle_outline_rounded, color: AppTheme.textSecondary),
                         onPressed: () {
                           state.removeTrackFromAlbum(track, albumName);

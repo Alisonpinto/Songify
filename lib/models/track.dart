@@ -8,7 +8,6 @@ class Track {
   final String pattern;
   final Color primaryColor;
   final Color secondaryColor;
-  bool isFavorite;
   final bool isImported;
   String? uri; // We use path string for uri or http url
   // We can't directly store ImageBitmap like Compose, we can store bytes
@@ -25,7 +24,6 @@ class Track {
     required this.pattern,
     required this.primaryColor,
     required this.secondaryColor,
-    this.isFavorite = false,
     this.isImported = false,
     this.uri,
     this.artworkBytes,
@@ -42,7 +40,6 @@ class Track {
       'pattern': pattern,
       'primaryColor': primaryColor.value,
       'secondaryColor': secondaryColor.value,
-      'isFavorite': isFavorite,
       'isImported': isImported,
       'uri': uri,
       'youtubeId': youtubeId,
@@ -59,7 +56,6 @@ class Track {
       pattern: json['pattern']?.toString() ?? 'waves',
       primaryColor: Color((json['primaryColor'] as num).toInt()),
       secondaryColor: Color((json['secondaryColor'] as num).toInt()),
-      isFavorite: json['isFavorite'] == true,
       isImported: json['isImported'] == true,
       uri: json['uri']?.toString(),
       youtubeId: json['youtubeId']?.toString(),

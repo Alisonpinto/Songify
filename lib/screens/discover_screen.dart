@@ -137,11 +137,10 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   trailing: IconButton(
-                                    icon: Icon(
-                                      track.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                      color: track.isFavorite ? AppTheme.primaryYellow : AppTheme.textSecondary,
-                                    ),
-                                    onPressed: () => state.toggleFavorite(track),
+                                    icon: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.textSecondary),
+                                    onPressed: () {
+                                      showAddToAlbumSheet(context, track, state);
+                                    },
                                   ),
                                   onTap: () {
                                     state.addTrackAndPlay(track);

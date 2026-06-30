@@ -64,52 +64,11 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      AppTheme.primaryYellow.withOpacity(0.3),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    AnimatedBuilder(
-                      animation: _waveHeightMultiplier,
-                      builder: (context, child) {
-                        return CustomPaint(
-                          size: const Size(120, 120),
-                          painter: WavePainter(_waveHeightMultiplier.value),
-                        );
-                      },
-                    ),
-                    const Icon(Icons.music_note_rounded, color: AppTheme.textPrimary, size: 48),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Songify',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.textPrimary,
-                  letterSpacing: 2,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Premium Offline Player',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppTheme.secondaryYellow,
-                  letterSpacing: 1,
-                ),
+              Image.asset(
+                'assets/splashlogo.png',
+                width: 200,
+                height: 200,
+                fit: BoxFit.contain,
               ),
             ],
           ),
