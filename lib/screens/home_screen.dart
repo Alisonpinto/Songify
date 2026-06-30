@@ -116,10 +116,7 @@ class HomeScreen extends StatelessWidget {
                           onPressed: () => state.toggleFavorite(track),
                         ),
                         onTap: () {
-                          if (state.songsList.indexOf(track) != -1) {
-                            state.playingTrackIndex = state.songsList.indexOf(track);
-                            state.togglePlayPause(); // This will play it if it's new
-                          }
+                          state.playFromQueue(filteredTracks, track);
                         },
                         onLongPress: () {
                           showAddToAlbumSheet(context, track, state);

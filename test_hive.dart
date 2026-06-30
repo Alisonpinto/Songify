@@ -1,0 +1,1 @@
+import 'package:hive/hive.dart'; import 'dart:io'; void main() async { Hive.init(Directory.current.path); var box = await Hive.openBox('test_box'); var track = {'id': 123, 'title': 'test', 'primaryColor': 4278190080}; await box.put('1', track); var val = box.get('1'); print(val); var map = Map<String, dynamic>.from(val); print(map['primaryColor'].runtimeType); exit(0); }

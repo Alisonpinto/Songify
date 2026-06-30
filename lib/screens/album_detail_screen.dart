@@ -18,6 +18,16 @@ class AlbumDetailScreen extends StatelessWidget {
         elevation: 0,
         actions: [
           IconButton(
+            icon: const Icon(Icons.shuffle, color: AppTheme.primaryYellow),
+            onPressed: () {
+              final state = Provider.of<AppState>(context, listen: false);
+              final tracks = state.getTracksForAlbum(albumName);
+              if (tracks.isNotEmpty) {
+                state.shuffleQueue(tracks);
+              }
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
             onPressed: () {
               showDialog(
@@ -113,10 +123,7 @@ class AlbumDetailScreen extends StatelessWidget {
                     ],
                   ),
                   onTap: () {
-                    if (state.songsList.indexOf(track) != -1) {
-                      state.playingTrackIndex = state.songsList.indexOf(track);
-                      state.togglePlayPause();
-                    }
+                    state.playFromQueue(tracks, track);
                   },
                 ),
               );

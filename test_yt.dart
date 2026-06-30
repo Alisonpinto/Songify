@@ -1,0 +1,1 @@
+import 'package:youtube_explode_dart/youtube_explode_dart.dart'; void main() async { var yt = YoutubeExplode(); var v = await yt.search.search('believer imagine dragons'); print(v.first.id.value); var m = await yt.videos.streamsClient.getManifest(v.first.id.value); print(m.audioOnly.first.url); yt.close(); }

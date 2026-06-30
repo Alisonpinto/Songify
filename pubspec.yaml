@@ -12,6 +12,7 @@ dependencies:
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   http: ^1.6.0
+  jiosaavn: ^0.1.1
   just_audio: ^0.10.6
   just_audio_background: ^0.0.1-beta.17
   on_audio_query: ^2.9.0

@@ -32,4 +32,38 @@ class Track {
     this.youtubeId,
     this.thumbnailUrl,
   });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'artist': artist,
+      'duration': duration,
+      'pattern': pattern,
+      'primaryColor': primaryColor.value,
+      'secondaryColor': secondaryColor.value,
+      'isFavorite': isFavorite,
+      'isImported': isImported,
+      'uri': uri,
+      'youtubeId': youtubeId,
+      'thumbnailUrl': thumbnailUrl,
+    };
+  }
+
+  factory Track.fromJson(Map<dynamic, dynamic> json) {
+    return Track(
+      id: (json['id'] as num).toInt(),
+      title: json['title']?.toString() ?? 'Unknown',
+      artist: json['artist']?.toString() ?? 'Unknown',
+      duration: json['duration']?.toString() ?? '00:00',
+      pattern: json['pattern']?.toString() ?? 'waves',
+      primaryColor: Color((json['primaryColor'] as num).toInt()),
+      secondaryColor: Color((json['secondaryColor'] as num).toInt()),
+      isFavorite: json['isFavorite'] == true,
+      isImported: json['isImported'] == true,
+      uri: json['uri']?.toString(),
+      youtubeId: json['youtubeId']?.toString(),
+      thumbnailUrl: json['thumbnailUrl']?.toString(),
+    );
+  }
 }

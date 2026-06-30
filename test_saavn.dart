@@ -1,0 +1,1 @@
+import 'package:http/http.dart' as http; void main() async { var res = await http.get(Uri.parse('https://saavn.dev/api/search/songs?query=believer')); print(res.statusCode); print(res.body.substring(0, 500)); }

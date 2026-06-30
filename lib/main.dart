@@ -19,6 +19,7 @@ Future<void> main() async {
   // Hive.registerAdapter(TrackAdapter()); // to be uncommented once generated
   await Hive.openBox('favorites');
   await Hive.openBox('albums');
+  await Hive.openBox('saved_tracks');
 
   await JustAudioBackground.init(
     androidNotificationChannelId: 'com.example.songify.channel.audio',

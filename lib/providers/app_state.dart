@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'package:jiosaavn/jiosaavn.dart';
 import '../models/track.dart';
 import 'dart:async';
 import 'dart:math' as math;
@@ -16,10 +16,12 @@ class AppState extends ChangeNotifier {
   String activeFilterChip = "All Songs";
   
   List<Track> songsList = [];
+  List<Track> currentQueue = [];
   
   int playingTrackIndex = 0;
   final AudioPlayer audioPlayer = AudioPlayer();
   final OnAudioQuery _audioQuery = OnAudioQuery();
+  final JioSaavnClient _jio = JioSaavnClient();
   
   bool isPlaying = false;
   double trackProgress = 0.0;
@@ -33,6 +35,15 @@ class AppState extends ChangeNotifier {
   Duration? _currentDuration;
   final Box _favoritesBox = Hive.box('favorites');
   final Box _albumsBox = Hive.box('albums');
+  final Box _savedTracksBox = Hive.box('saved_tracks');
+  
+  int _generateStableId(String stringId) {
+    int hash = 0;
+    for (int i = 0; i < stringId.length; i++) {
+      hash = 31 * hash + stringId.codeUnitAt(i);
+    }
+    return hash;
+  }
   
   AppState() {
     _initAudioStreams();
@@ -61,7 +72,29 @@ class AppState extends ChangeNotifier {
     });
   }
 
+  void _loadSavedTracks() {
+    try {
+      for (var value in _savedTracksBox.values) {
+        try {
+          final track = Track.fromJson(value as Map<dynamic, dynamic>);
+          track.isFavorite = _favoritesBox.get(track.id, defaultValue: false) as bool;
+          if (songsList.indexWhere((t) => t.id == track.id) == -1) {
+             songsList.add(track);
+          }
+        } catch (e) {
+          print("Error parsing saved track: $e");
+        }
+      }
+      notifyListeners();
+    } catch (e) {
+      print("Error loading saved tracks box: $e");
+    }
+  }
+
   Future<void> requestPermissionAndFetchSongs() async {
+    _loadSavedTracks();
+    
+    try {
     bool permissionStatus = await _audioQuery.permissionsRequest();
     if (!permissionStatus) {
       permissionStatus = await Permission.storage.request().isGranted;
@@ -82,7 +115,7 @@ class AppState extends ChangeNotifier {
     final colors = [Colors.red, Colors.blue, Colors.green, Colors.purple, Colors.orange];
     final random = math.Random();
 
-    songsList = songs.where((s) => s.isMusic == true && s.data != null).map((song) {
+    final localTracks = songs.where((s) => s.isMusic == true && s.data != null).map((song) {
       bool isFav = _favoritesBox.get(song.id, defaultValue: false) as bool;
       return Track(
         id: song.id,
@@ -97,6 +130,16 @@ class AppState extends ChangeNotifier {
         uri: song.data,
       );
     }).toList();
+    
+    for (var localTrack in localTracks) {
+      if (songsList.indexWhere((t) => t.id == localTrack.id) == -1) {
+        songsList.add(localTrack);
+      }
+    }
+    
+    } catch (e) {
+      print("Local songs fetch error: $e");
+    }
 
     notifyListeners();
   }
@@ -110,11 +153,19 @@ class AppState extends ChangeNotifier {
   }
   
   Track get currentTrack {
-    if (songsList.isEmpty) return Track(
-      id: -1, title: "No songs found", artist: "Import some music", duration: "00:00", pattern: "waves",
-      primaryColor: Colors.grey, secondaryColor: Colors.black,
-    );
-    return songsList[playingTrackIndex];
+    if (currentQueue.isEmpty) {
+      if (songsList.isEmpty) {
+        return Track(
+          id: -1, title: "No songs found", artist: "Import some music", duration: "00:00", pattern: "waves",
+          primaryColor: Colors.grey, secondaryColor: Colors.black,
+        );
+      }
+      currentQueue = List.from(songsList);
+    }
+    if (playingTrackIndex < 0 || playingTrackIndex >= currentQueue.length) {
+      playingTrackIndex = 0;
+    }
+    return currentQueue[playingTrackIndex];
   }
   
   void changeTab(int index) {
@@ -135,6 +186,9 @@ class AppState extends ChangeNotifier {
   void toggleFavorite(Track track) {
     track.isFavorite = !track.isFavorite;
     _favoritesBox.put(track.id, track.isFavorite);
+    if (!track.isImported && track.isFavorite) {
+      _savedTracksBox.put(track.id, track.toJson());
+    }
     notifyListeners();
   }
   
@@ -158,6 +212,9 @@ class AppState extends ChangeNotifier {
     if (!trackIds.contains(track.id)) {
       trackIds.add(track.id);
       _albumsBox.put(albumName, trackIds);
+      if (!track.isImported) {
+        _savedTracksBox.put(track.id, track.toJson());
+      }
       notifyListeners();
     }
   }
@@ -180,46 +237,91 @@ class AppState extends ChangeNotifier {
     if (query.trim().isEmpty) return [];
     
     try {
-      final response = await http.get(Uri.parse('https://api.audius.co/v1/tracks/search?query=${Uri.encodeComponent(query)}&app_name=SongifyApp'));
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final List<dynamic> results = data['data'];
-        final List<Track> tracks = [];
+      final searchResult = await _jio.search.songs(query);
+      if (searchResult != null && searchResult.results != null && searchResult.results!.isNotEmpty) {
+        final songIds = searchResult.results!.map((s) => s.id!).toList();
+        final List<SongResponse> detailedSongs = await _jio.songs.detailsById(songIds);
         
+        final List<Track> tracks = [];
         final patterns = ['waves', 'vinyl', 'spheres', 'grid'];
         final colors = [Colors.red, Colors.blue, Colors.green, Colors.purple, Colors.orange];
         final random = math.Random();
         
-        for (var trackData in results) {
+        for (var song in detailedSongs) {
+          String? streamUrl;
+          if (song.downloadUrl != null && song.downloadUrl!.isNotEmpty) {
+            streamUrl = song.downloadUrl!.last.link; // Highest quality
+          }
+          if (streamUrl == null) continue;
+          
+          String? imageUrl;
+          if (song.image != null && song.image!.isNotEmpty) {
+            imageUrl = song.image!.last.link; 
+          }
+          
+          String artistName = song.primaryArtists.isNotEmpty ? song.primaryArtists : 'Unknown Artist';
+          
+          int durationSeconds = 0;
+          try {
+            durationSeconds = int.parse(song.duration);
+          } catch (_) {}
+
           tracks.add(Track(
-            id: trackData['id'].hashCode,
-            title: trackData['title'] ?? 'Unknown',
-            artist: trackData['user']?['name'] ?? 'Unknown Artist',
-            duration: _formatDuration((trackData['duration'] ?? 0) * 1000), // Audius duration is in seconds
+            id: _generateStableId(song.id),
+            title: song.name ?? 'Unknown',
+            artist: artistName,
+            duration: _formatDuration(durationSeconds * 1000),
             pattern: patterns[random.nextInt(patterns.length)],
             primaryColor: colors[random.nextInt(colors.length)],
             secondaryColor: colors[random.nextInt(colors.length)],
             isFavorite: false,
             isImported: false,
-            youtubeId: trackData['id'], // We'll store the Audius track ID here
-            thumbnailUrl: trackData['artwork']?['150x150'] ?? trackData['artwork']?['480x480'],
+            uri: streamUrl, // Direct Stream URL!
+            thumbnailUrl: imageUrl,
           ));
         }
         return tracks;
       }
     } catch (e) {
-      print("Error fetching from Audius: $e");
+      print("Error fetching from JioSaavn: $e");
     }
     return [];
   }
   
   Future<void> addTrackAndPlay(Track track) async {
-    // Mostly unused now since we load all songs automatically
-    if (!songsList.any((t) => t.id == track.id)) {
+    final existingIndex = songsList.indexWhere((t) => t.id == track.id);
+    if (existingIndex == -1) {
       songsList.insert(0, track);
     }
-    playingTrackIndex = songsList.indexOf(track);
+    currentQueue = List.from(songsList);
+    playingTrackIndex = currentQueue.indexWhere((t) => t.id == track.id);
+    if (playingTrackIndex == -1) playingTrackIndex = 0;
+    
+    if (audioPlayer.playing) await audioPlayer.pause();
     _playCurrentTrack();
+    notifyListeners();
+  }
+  
+  void playFromQueue(List<Track> queue, Track track) {
+    if (queue.isEmpty) return;
+    currentQueue = List.from(queue);
+    playingTrackIndex = currentQueue.indexOf(track);
+    if (playingTrackIndex == -1) playingTrackIndex = 0;
+    
+    if (audioPlayer.playing) audioPlayer.pause();
+    _playCurrentTrack();
+    notifyListeners();
+  }
+  
+  void shuffleQueue(List<Track> queue) {
+    if (queue.isEmpty) return;
+    currentQueue = List.from(queue);
+    isShuffle = true;
+    playingTrackIndex = math.Random().nextInt(currentQueue.length);
+    
+    if (audioPlayer.playing) audioPlayer.pause();
+    _playCurrentTrack();
+    notifyListeners();
   }
   
   void togglePlayPause() {
@@ -238,18 +340,18 @@ class AppState extends ChangeNotifier {
   }
   
   void nextTrack() {
-    if (songsList.isEmpty) return;
+    if (currentQueue.isEmpty) return;
     if (isShuffle) {
-      playingTrackIndex = math.Random().nextInt(songsList.length);
+      playingTrackIndex = math.Random().nextInt(currentQueue.length);
     } else {
-      playingTrackIndex = (playingTrackIndex + 1) % songsList.length;
+      playingTrackIndex = (playingTrackIndex + 1) % currentQueue.length;
     }
     _playCurrentTrack();
   }
   
   void prevTrack() {
-    if (songsList.isEmpty) return;
-    playingTrackIndex = playingTrackIndex - 1 < 0 ? songsList.length - 1 : playingTrackIndex - 1;
+    if (currentQueue.isEmpty) return;
+    playingTrackIndex = playingTrackIndex - 1 < 0 ? currentQueue.length - 1 : playingTrackIndex - 1;
     _playCurrentTrack();
   }
   
@@ -258,9 +360,8 @@ class AppState extends ChangeNotifier {
     try {
       AudioSource? source;
       
-      if (currentTrack.youtubeId != null) {
-        currentTrack.uri = 'https://api.audius.co/v1/tracks/${currentTrack.youtubeId}/stream?app_name=SongifyApp';
-
+      if (!currentTrack.isImported && currentTrack.uri != null) {
+        // Online tracks from JioSaavn provide direct streaming URLs
         source = AudioSource.uri(
           Uri.parse(currentTrack.uri!),
           tag: MediaItem(
@@ -330,4 +431,7 @@ class AppState extends ChangeNotifier {
     super.dispose();
   }
 }
+
+
+
 
