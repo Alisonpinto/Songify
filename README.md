@@ -12,5 +12,15 @@ So, I took matters into my own hands and created Songify—a project born out of
 
 🎨 **Design & Logo**: A huge shoutout and credit to **Abigale Shelke** for the amazing design and logo work! 
 
+## Screenshots
+
+<div align="center">
+  <img src="assets/SS1.jpeg" width="200" alt="Screenshot 1" />
+  <img src="assets/SS2.jpeg" width="200" alt="Screenshot 2" />
+  <img src="assets/SS3.jpeg" width="200" alt="Screenshot 3" />
+  <img src="assets/SS4.jpeg" width="200" alt="Screenshot 4" />
+  <img src="assets/SS5.jpeg" width="200" alt="Screenshot 5" />
+</div>
+
 ---
 *Built with passion and Flutter.*
