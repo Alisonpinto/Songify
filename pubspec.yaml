@@ -17,6 +17,7 @@ dependencies:
   on_audio_query: ^2.9.0
   permission_handler: ^12.0.3
   provider: ^6.1.5+1
+  random_avatar: ^0.0.8
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -28,9 +29,10 @@ flutter:
   uses-material-design: true
   assets:
     - assets/
-
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/logo.png"
+  image_path: "assets/logo_black_bg_padded.png"
+  adaptive_icon_background: "#000000"
+  adaptive_icon_foreground: "assets/logo_padded.png"
   remove_alpha_ios: true

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../models/track.dart';
@@ -17,6 +18,14 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   final TextEditingController _searchController = TextEditingController();
   List<Track> _searchResults = [];
   bool _isLoading = false;
+  Timer? _debounce;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _debounce?.cancel();
+    super.dispose();
+  }
 
   void _performSearch(String query) async {
     if (query.trim().isEmpty) {
@@ -83,16 +92,24 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                     contentPadding: const EdgeInsets.symmetric(vertical: 0),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide.none,
+                      borderSide: const BorderSide(color: AppTheme.primaryYellow),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: const BorderSide(color: AppTheme.primaryYellow),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),
-                      borderSide: const BorderSide(color: AppTheme.primaryYellow),
+                      borderSide: const BorderSide(color: AppTheme.primaryYellow, width: 2),
                     ),
                   ),
                   onSubmitted: _performSearch,
                   onChanged: (val) {
                     setState(() {}); // Update suffix icon
+                    if (_debounce?.isActive ?? false) _debounce!.cancel();
+                    _debounce = Timer(const Duration(milliseconds: 500), () {
+                      _performSearch(val);
+                    });
                   },
                 ),
                 const SizedBox(height: 20),

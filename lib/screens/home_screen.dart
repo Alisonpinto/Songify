@@ -32,9 +32,9 @@ class HomeScreen extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      "Good Evening, Alison",
-                      style: TextStyle(
+                    Text(
+                      "Good Evening, ${state.userName}",
+                      style: const TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 0.5,
@@ -69,11 +69,15 @@ class HomeScreen extends StatelessWidget {
                     contentPadding: const EdgeInsets.symmetric(vertical: 0),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide.none,
+                      borderSide: const BorderSide(color: AppTheme.primaryYellow),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: const BorderSide(color: AppTheme.primaryYellow),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),
-                      borderSide: const BorderSide(color: AppTheme.primaryYellow),
+                      borderSide: const BorderSide(color: AppTheme.primaryYellow, width: 2),
                     ),
                   ),
                 ),
