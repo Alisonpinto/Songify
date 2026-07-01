@@ -81,11 +81,14 @@ class AppState extends ChangeNotifier {
     
     _playerStateSub = audioPlayer.playerStateStream.listen((state) {
       isPlaying = state.playing;
-      
-      if (state.processingState == ProcessingState.completed) {
-        handleTrackEnd();
-      }
       notifyListeners();
+    });
+
+    audioPlayer.currentIndexStream.listen((index) {
+      if (index != null && currentQueue.isNotEmpty && index < currentQueue.length) {
+        playingTrackIndex = index;
+        notifyListeners();
+      }
     });
   }
 
@@ -409,6 +412,35 @@ class AppState extends ChangeNotifier {
     return [];
   }
   
+  ConcatenatingAudioSource _createConcatenatingSource(List<Track> queue) {
+    final audioSources = queue.map((track) {
+      if (!track.isImported && track.uri != null) {
+        return AudioSource.uri(
+          Uri.parse(track.uri!),
+          tag: MediaItem(
+            id: track.id.toString(),
+            album: "Online",
+            title: track.title,
+            artist: track.artist,
+            artUri: track.thumbnailUrl != null ? Uri.parse(track.thumbnailUrl!) : null,
+          ),
+        );
+      } else {
+        return AudioSource.uri(
+          Uri.file(track.uri ?? ''),
+          tag: MediaItem(
+            id: track.id.toString(),
+            album: "Local Music",
+            title: track.title,
+            artist: track.artist,
+          ),
+        );
+      }
+    }).toList();
+
+    return ConcatenatingAudioSource(children: audioSources);
+  }
+
   Future<void> addTrackAndPlay(Track track) async {
     final existingIndex = songsList.indexWhere((t) => t.id == track.id);
     if (existingIndex == -1) {
@@ -419,118 +451,84 @@ class AppState extends ChangeNotifier {
     if (playingTrackIndex == -1) playingTrackIndex = 0;
     
     if (audioPlayer.playing) await audioPlayer.pause();
-    _playCurrentTrack();
+    final source = _createConcatenatingSource(currentQueue);
+    await audioPlayer.setAudioSource(source, initialIndex: playingTrackIndex);
+    audioPlayer.setLoopMode(isRepeat ? LoopMode.one : LoopMode.all);
+    audioPlayer.setShuffleModeEnabled(isShuffle);
+    audioPlayer.play();
     notifyListeners();
   }
   
-  void playFromQueue(List<Track> queue, Track track) {
+  Future<void> playFromQueue(List<Track> queue, Track track) async {
     if (queue.isEmpty) return;
     currentQueue = List.from(queue);
     playingTrackIndex = currentQueue.indexOf(track);
     if (playingTrackIndex == -1) playingTrackIndex = 0;
     
-    if (audioPlayer.playing) audioPlayer.pause();
-    _playCurrentTrack();
+    if (audioPlayer.playing) await audioPlayer.pause();
+    final source = _createConcatenatingSource(currentQueue);
+    await audioPlayer.setAudioSource(source, initialIndex: playingTrackIndex);
+    audioPlayer.setLoopMode(isRepeat ? LoopMode.one : LoopMode.all);
+    audioPlayer.setShuffleModeEnabled(isShuffle);
+    audioPlayer.play();
     notifyListeners();
   }
   
-  void shuffleQueue(List<Track> queue) {
+  Future<void> shuffleQueue(List<Track> queue) async {
     if (queue.isEmpty) return;
     currentQueue = List.from(queue);
     isShuffle = true;
     playingTrackIndex = math.Random().nextInt(currentQueue.length);
     
-    if (audioPlayer.playing) audioPlayer.pause();
-    _playCurrentTrack();
+    if (audioPlayer.playing) await audioPlayer.pause();
+    final source = _createConcatenatingSource(currentQueue);
+    await audioPlayer.setAudioSource(source, initialIndex: playingTrackIndex);
+    audioPlayer.setLoopMode(isRepeat ? LoopMode.one : LoopMode.all);
+    await audioPlayer.setShuffleModeEnabled(true);
+    audioPlayer.play();
     notifyListeners();
   }
   
-  void togglePlayPause() {
+  Future<void> togglePlayPause() async {
     if (audioPlayer.playing) {
       audioPlayer.pause();
     } else {
-      if (currentTrack.uri != null && currentTrack.id != -1) {
+      if (currentTrack.id != -1) {
         if (audioPlayer.processingState == ProcessingState.idle) {
-          _playCurrentTrack();
-        } else {
-          audioPlayer.play();
+          final source = _createConcatenatingSource(currentQueue);
+          await audioPlayer.setAudioSource(source, initialIndex: playingTrackIndex);
         }
+        audioPlayer.play();
       }
     }
     notifyListeners();
   }
   
   void nextTrack() {
-    if (currentQueue.isEmpty) return;
-    if (isShuffle) {
-      playingTrackIndex = math.Random().nextInt(currentQueue.length);
+    if (audioPlayer.hasNext) {
+      audioPlayer.seekToNext();
     } else {
-      playingTrackIndex = (playingTrackIndex + 1) % currentQueue.length;
+      audioPlayer.seek(Duration.zero, index: 0);
     }
-    _playCurrentTrack();
   }
   
   void prevTrack() {
-    if (currentQueue.isEmpty) return;
-    playingTrackIndex = playingTrackIndex - 1 < 0 ? currentQueue.length - 1 : playingTrackIndex - 1;
-    _playCurrentTrack();
-  }
-  
-  void _playCurrentTrack() async {
-    if (currentTrack.id == -1) return;
-    try {
-      AudioSource? source;
-      
-      if (!currentTrack.isImported && currentTrack.uri != null) {
-        // Online tracks from JioSaavn provide direct streaming URLs
-        source = AudioSource.uri(
-          Uri.parse(currentTrack.uri!),
-          tag: MediaItem(
-            id: currentTrack.id.toString(),
-            album: "Online",
-            title: currentTrack.title,
-            artist: currentTrack.artist,
-            artUri: currentTrack.thumbnailUrl != null ? Uri.parse(currentTrack.thumbnailUrl!) : null,
-          ),
-        );
-      } else if (currentTrack.uri != null) {
-        source = AudioSource.uri(
-          Uri.file(currentTrack.uri!),
-          tag: MediaItem(
-            id: currentTrack.id.toString(),
-            album: "Local Music",
-            title: currentTrack.title,
-            artist: currentTrack.artist,
-          ),
-        );
-      }
-      
-      if (source == null) return;
-
-      await audioPlayer.setAudioSource(source);
-      audioPlayer.play();
-    } catch (e) {
-      print("Error loading audio: $e");
-    }
-    notifyListeners();
-  }
-  
-  void handleTrackEnd() {
-    if (isRepeat) {
-      audioPlayer.seek(Duration.zero);
-      audioPlayer.play();
+    if (audioPlayer.hasPrevious) {
+      audioPlayer.seekToPrevious();
     } else {
-      nextTrack();
+      audioPlayer.seek(Duration.zero, index: currentQueue.length - 1);
     }
   }
   
   void toggleShuffle() {
     isShuffle = !isShuffle;
+    audioPlayer.setShuffleModeEnabled(isShuffle);
     notifyListeners();
   }
   
   void toggleRepeat() {
     isRepeat = !isRepeat;
+    audioPlayer.setLoopMode(isRepeat ? LoopMode.one : LoopMode.all);
     notifyListeners();
   }
   
