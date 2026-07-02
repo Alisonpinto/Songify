@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'theme.dart';
@@ -80,14 +81,46 @@ class _MainShellState extends State<MainShell> {
     
     return Consumer<AppState>(
       builder: (context, state, child) {
+        final glowColor = MiniPlayer.getTrackColor(state.currentTrack);
+
         return Scaffold(
-          body: IndexedStack(
-            index: state.currentTab,
-            children: const [
-              HomeScreen(),
-              DiscoverScreen(),
-              LibraryScreen(),
-              ProfileScreen(),
+          backgroundColor: AppTheme.darkBackground,
+          body: Stack(
+            children: [
+              // Global glowing background element
+              Positioned(
+                top: 0,
+                right: 0,
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 800),
+                    curve: Curves.easeInOut,
+                    width: MediaQuery.of(context).size.width * 0.7,
+                    height: MediaQuery.of(context).size.height * 0.4,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topRight,
+                        end: Alignment.bottomLeft,
+                        colors: [
+                          glowColor.withValues(alpha: 0.45),
+                          Colors.transparent,
+                        ],
+                        stops: const [0.0, 0.9],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              IndexedStack(
+                index: state.currentTab,
+                children: const [
+                  HomeScreen(),
+                  DiscoverScreen(),
+                  LibraryScreen(),
+                  ProfileScreen(),
+                ],
+              ),
             ],
           ),
           bottomNavigationBar: Column(

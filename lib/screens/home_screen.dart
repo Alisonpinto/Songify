@@ -7,6 +7,8 @@ import '../widgets/procedural_album_art.dart';
 import '../widgets/add_to_album_sheet.dart';
 import 'dart:math' as math;
 import 'album_detail_screen.dart';
+import 'package:random_avatar/random_avatar.dart';
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -32,16 +34,53 @@ class HomeScreen extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppTheme.darkCard,
+                            border: Border.all(color: AppTheme.primaryYellow.withValues(alpha: 0.5), width: 1.5),
+                            image: state.userProfileImage != null
+                                ? DecorationImage(
+                                    image: NetworkImage(state.userProfileImage!),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
+                          ),
+                          child: state.userProfileImage == null
+                              ? ClipOval(
+                                  child: RandomAvatar(
+                                    state.currentAvatarSeed,
+                                    trBackground: false,
+                                  ),
+                                )
+                              : null,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          state.userName,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
                     Text(
-                      "Good Evening, ${state.userName}",
+                      "Hi ${state.userName}",
                       style: const TextStyle(
-                        fontSize: 28,
+                        fontSize: 32,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 0.5,
                         color: AppTheme.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     Text(
                       "Your offline music hub is ready",
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(

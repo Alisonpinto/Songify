@@ -21,6 +21,13 @@ class AppState extends ChangeNotifier {
   String userHandle = "@musiclover";
   String? userProfileImage;
   
+  String? _avatarSeed;
+  String get currentAvatarSeed => _avatarSeed ?? userName;
+  
+  void generateNewAvatar() {
+    _avatarSeed = DateTime.now().millisecondsSinceEpoch.toString();
+    notifyListeners();
+  }
   List<Track> songsList = [];
   List<Track> currentQueue = [];
   
@@ -129,36 +136,48 @@ class AppState extends ChangeNotifier {
         notifyListeners(); // Update UI with user info immediately
       }
 
-      // 2. Fetch saved tracks (only tracks that are in albums)
-      final tracksResponse = await _supabase.from('saved_tracks').select();
-      for (var row in tracksResponse) {
-        try {
-          final track = Track.fromJson(row);
-          if (songsList.indexWhere((t) => t.id == track.id) == -1) {
-             songsList.add(track);
-          }
-        } catch (e) {
-          print("Error parsing saved track: $e");
-        }
-      }
-      
-      // 3. Fetch albums and their tracks
+      // 2. Fetch albums for this user
       try {
-        final albumsResponse = await _supabase.from('albums').select('name');
+        final albumsResponse = await _supabase.from('albums').select('name').eq('user_id', currentUser!.id);
         _albumNamesCache = albumsResponse.map((a) => a['name'] as String).toList();
         
-        final albumTracksResponse = await _supabase.from('album_tracks').select();
         _albumTracksCache.clear();
-        for (var row in albumTracksResponse) {
-          String albumName = row['album_name'];
-          int trackId = row['track_id'];
-          if (!_albumTracksCache.containsKey(albumName)) {
-             _albumTracksCache[albumName] = [];
+        final userTrackIds = <int>{};
+        
+        if (_albumNamesCache.isNotEmpty) {
+          // 3. Fetch album tracks
+          final albumTracksResponse = await _supabase.from('album_tracks').select();
+          for (var row in albumTracksResponse) {
+            String albumName = row['album_name'];
+            if (_albumNamesCache.contains(albumName)) {
+              int trackId = row['track_id'];
+              if (!_albumTracksCache.containsKey(albumName)) {
+                 _albumTracksCache[albumName] = [];
+              }
+              _albumTracksCache[albumName]!.add(trackId);
+              userTrackIds.add(trackId);
+            }
           }
-          _albumTracksCache[albumName]!.add(trackId);
+        }
+        
+        // 4. Fetch saved tracks that are in the user's albums
+        if (userTrackIds.isNotEmpty) {
+          final tracksResponse = await _supabase.from('saved_tracks').select();
+          for (var row in tracksResponse) {
+            try {
+              final track = Track.fromJson(row);
+              if (userTrackIds.contains(track.id)) {
+                if (songsList.indexWhere((t) => t.id == track.id) == -1) {
+                   songsList.add(track);
+                }
+              }
+            } catch (e) {
+              print("Error parsing saved track: $e");
+            }
+          }
         }
       } catch (e) {
-        print("Error fetching albums: $e");
+        print("Error fetching user library: $e");
       }
       
     } catch (e) {
@@ -198,6 +217,16 @@ class AppState extends ChangeNotifier {
           // Handle permission denied
           return;
         }
+      }
+      
+      // Request Notification Permission for Foreground Service
+      if (await Permission.notification.isDenied) {
+        await Permission.notification.request();
+      }
+      
+      // Request Ignore Battery Optimization so app isn't killed while cycling
+      if (await Permission.ignoreBatteryOptimizations.isDenied) {
+        await Permission.ignoreBatteryOptimizations.request();
       }
 
       List<SongModel> songs = await _audioQuery.querySongs(
