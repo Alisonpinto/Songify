@@ -27,6 +27,8 @@ Future<void> main() async {
     androidNotificationChannelId: 'com.example.songify.channel.audio',
     androidNotificationChannelName: 'Audio playback',
     androidNotificationOngoing: true,
+    androidStopForegroundOnPause: false, // Keep service alive when paused & app is in background
+    preloadArtwork: true,
   );
 
   runApp(

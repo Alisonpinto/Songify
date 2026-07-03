@@ -9,6 +9,8 @@ import 'package:jiosaavn/jiosaavn.dart';
 import '../models/track.dart';
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AppState extends ChangeNotifier {
   int currentTab = 0; // 0 = Home, 1 = Library, 2 = Now Playing
@@ -71,14 +73,22 @@ class AppState extends ChangeNotifier {
       }
     });
     
-    requestPermissionAndFetchSongs();
+    _restorePlaybackState().then((_) {
+      requestPermissionAndFetchSongs();
+    });
   }
 
   void _initAudioStreams() {
+    DateTime lastSavedTime = DateTime.now();
     _positionSub = audioPlayer.positionStream.listen((position) {
       if (_currentDuration != null && _currentDuration!.inMilliseconds > 0) {
         trackProgress = position.inMilliseconds / _currentDuration!.inMilliseconds;
         notifyListeners();
+      }
+      final now = DateTime.now();
+      if (now.difference(lastSavedTime).inSeconds >= 3) {
+        lastSavedTime = now;
+        _persistPosition(position.inMilliseconds);
       }
     });
     
@@ -89,12 +99,16 @@ class AppState extends ChangeNotifier {
     _playerStateSub = audioPlayer.playerStateStream.listen((state) {
       isPlaying = state.playing;
       notifyListeners();
+      if (!state.playing) {
+        _persistPosition(audioPlayer.position.inMilliseconds);
+      }
     });
 
     audioPlayer.currentIndexStream.listen((index) {
       if (index != null && currentQueue.isNotEmpty && index < currentQueue.length) {
         playingTrackIndex = index;
         notifyListeners();
+        _persistPlaybackState();
       }
     });
   }
@@ -486,6 +500,7 @@ class AppState extends ChangeNotifier {
     audioPlayer.setShuffleModeEnabled(isShuffle);
     audioPlayer.play();
     notifyListeners();
+    _persistPlaybackState();
   }
   
   Future<void> playFromQueue(List<Track> queue, Track track) async {
@@ -501,6 +516,7 @@ class AppState extends ChangeNotifier {
     audioPlayer.setShuffleModeEnabled(isShuffle);
     audioPlayer.play();
     notifyListeners();
+    _persistPlaybackState();
   }
   
   Future<void> shuffleQueue(List<Track> queue) async {
@@ -516,6 +532,7 @@ class AppState extends ChangeNotifier {
     await audioPlayer.setShuffleModeEnabled(true);
     audioPlayer.play();
     notifyListeners();
+    _persistPlaybackState();
   }
   
   Future<void> togglePlayPause() async {
@@ -566,10 +583,83 @@ class AppState extends ChangeNotifier {
     if (_currentDuration != null) {
       final ms = (progress * _currentDuration!.inMilliseconds).toInt();
       audioPlayer.seek(Duration(milliseconds: ms));
+      _persistPosition(ms);
     }
     notifyListeners();
   }
   
+  Future<void> _persistPlaybackState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final queueJson = currentQueue.map((track) => track.toJson()).toList();
+      await prefs.setString('saved_queue', jsonEncode(queueJson));
+      await prefs.setInt('saved_track_index', playingTrackIndex);
+    } catch (e) {
+      print("Error persisting playback state: $e");
+    }
+  }
+
+  Future<void> _persistPosition(int positionMs) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('saved_position_ms', positionMs);
+    } catch (e) {
+      print("Error persisting position: $e");
+    }
+  }
+
+  int _parseDurationStringToMs(String durationStr) {
+    try {
+      final parts = durationStr.split(':');
+      if (parts.length == 2) {
+        final minutes = int.parse(parts[0]);
+        final seconds = int.parse(parts[1]);
+        return (minutes * 60 + seconds) * 1000;
+      } else if (parts.length == 3) {
+        final hours = int.parse(parts[0]);
+        final minutes = int.parse(parts[1]);
+        final seconds = int.parse(parts[2]);
+        return (hours * 3600 + minutes * 60 + seconds) * 1000;
+      }
+    } catch (_) {}
+    return 0;
+  }
+
+  Future<void> _restorePlaybackState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final queueString = prefs.getString('saved_queue');
+      final savedIndex = prefs.getInt('saved_track_index');
+      final savedPositionMs = prefs.getInt('saved_position_ms') ?? 0;
+
+      if (queueString != null && savedIndex != null) {
+        final List<dynamic> queueList = jsonDecode(queueString);
+        final restoredQueue = queueList.map((item) => Track.fromJson(item)).toList();
+        
+        if (restoredQueue.isNotEmpty && savedIndex >= 0 && savedIndex < restoredQueue.length) {
+          currentQueue = restoredQueue;
+          playingTrackIndex = savedIndex;
+          
+          final source = _createConcatenatingSource(currentQueue);
+          await audioPlayer.setAudioSource(
+            source,
+            initialIndex: playingTrackIndex,
+            initialPosition: Duration(milliseconds: savedPositionMs),
+          );
+          
+          final durationMs = _parseDurationStringToMs(currentTrack.duration);
+          if (durationMs > 0) {
+            trackProgress = savedPositionMs / durationMs;
+          }
+          
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      print("Error restoring playback state: $e");
+    }
+  }
+
   @override
   void dispose() {
     _positionSub?.cancel();
