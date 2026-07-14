@@ -16,13 +16,7 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, state, child) {
-        List<Track> filteredTracks = state.songsList;
-        if (state.searchQuery.trim().isNotEmpty) {
-          filteredTracks = state.songsList.where((t) => 
-            t.title.toLowerCase().contains(state.searchQuery.toLowerCase()) || 
-            t.artist.toLowerCase().contains(state.searchQuery.toLowerCase())
-          ).toList();
-        }
+        final filteredTracks = state.songsList;
 
         return SafeArea(
           child: Padding(
@@ -90,43 +84,12 @@ class HomeScreen extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 20),
-                TextField(
-                  onChanged: state.updateSearch,
-                  style: const TextStyle(color: AppTheme.textPrimary),
-                  decoration: InputDecoration(
-                    hintText: "Search songs, artists...",
-                    hintStyle: const TextStyle(color: AppTheme.textMuted),
-                    prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.textSecondary),
-                    suffixIcon: state.searchQuery.isNotEmpty 
-                      ? IconButton(
-                          icon: const Icon(Icons.close_rounded, color: AppTheme.textSecondary),
-                          onPressed: () => state.updateSearch(""),
-                        ) 
-                      : null,
-                    filled: true,
-                    fillColor: AppTheme.darkSurface,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: const BorderSide(color: AppTheme.primaryYellow),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: const BorderSide(color: AppTheme.primaryYellow),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: const BorderSide(color: AppTheme.primaryYellow, width: 2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
                 Expanded(
                   child: SingleChildScrollView(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (state.albumNames.isNotEmpty && state.searchQuery.trim().isEmpty) ...[
+                        if (state.albumNames.isNotEmpty) ...[
                   const Text(
                     "Your Albums",
                     style: TextStyle(

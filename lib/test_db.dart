@@ -20,4 +20,9 @@ void main() async {
     final albumTracks = await supabase.from('album_tracks').select().limit(1);
     print('album_tracks columns: ${albumTracks.isNotEmpty ? albumTracks.first.keys : "empty"}');
   } catch(e) { print(e); }
+
+  try {
+    final users = await supabase.from('users').select().limit(1);
+    print('users columns: ${users.isNotEmpty ? users.first.keys : "empty"}');
+  } catch(e) { print(e); }
 }

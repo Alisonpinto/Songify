@@ -65,6 +65,7 @@ class _AuthScreenState extends State<AuthScreen> {
             'id': userId,
             'name': name,
             'handle': handle,
+            'email': email,
           });
         }
         

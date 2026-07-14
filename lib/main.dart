@@ -26,7 +26,7 @@ Future<void> main() async {
   await JustAudioBackground.init(
     androidNotificationChannelId: 'com.example.songify.channel.audio',
     androidNotificationChannelName: 'Audio playback',
-    androidNotificationOngoing: true,
+    androidNotificationOngoing: false,
     androidStopForegroundOnPause: false, // Keep service alive when paused & app is in background
     preloadArtwork: true,
   );

@@ -210,7 +210,6 @@ class ProfileScreen extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         _buildSettingsTile(Icons.person_outline_rounded, "Edit Profile", "Change your name and handle", () => _showEditProfileDialog(context, state, glowColor)),
-        _buildSettingsTile(Icons.notifications_none_rounded, "Notifications", "Manage app alerts", () {}),
         _buildSettingsTile(Icons.info_outline_rounded, "About Songify", "Version 1.0.0", () {}),
       ],
     );
