@@ -17,17 +17,14 @@ class LibraryScreen extends StatelessWidget {
       builder: (context, state, child) {
         List<Track> displayList = state.songsList;
         
+        // Filter by search
+        if (state.searchQuery.trim().isNotEmpty) {
+          displayList = state.searchLocalSongs(state.searchQuery);
+        }
+
         // Filter by active chip
         if (state.activeFilterChip == 'Imported') {
           displayList = displayList.where((t) => t.isImported).toList();
-        }
-        
-        // Filter by search
-        if (state.searchQuery.trim().isNotEmpty) {
-          displayList = displayList.where((t) => 
-            t.title.toLowerCase().contains(state.searchQuery.toLowerCase()) || 
-            t.artist.toLowerCase().contains(state.searchQuery.toLowerCase())
-          ).toList();
         }
 
         return SafeArea(

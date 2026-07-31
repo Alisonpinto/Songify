@@ -7,6 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:jiosaavn/jiosaavn.dart';
 import '../models/track.dart';
+import '../utils/search_engine.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:convert';
@@ -37,6 +38,12 @@ class AppState extends ChangeNotifier {
   final AudioPlayer audioPlayer = AudioPlayer();
   final OnAudioQuery _audioQuery = OnAudioQuery();
   final JioSaavnClient _jio = JioSaavnClient();
+  
+  List<Track> recommendedTracks = [];
+  bool isLoadingRecommendations = false;
+  
+  List<Track> recentSearches = [];
+  Map<String, int> playCounts = {};
   
   bool isPlaying = false;
   double trackProgress = 0.0;
@@ -109,9 +116,16 @@ class AppState extends ChangeNotifier {
         playingTrackIndex = index;
         notifyListeners();
         _persistPlaybackState();
+        
+        final track = currentQueue[index];
+        if (track.youtubeId != null) {
+          fetchRecommendations(track.youtubeId!);
+        }
       }
     });
   }
+
+
 
   Future<void> loadSavedTracks() async {
     try {
@@ -445,12 +459,225 @@ class AppState extends ChangeNotifier {
             isImported: false,
             uri: streamUrl, // Direct Stream URL!
             thumbnailUrl: imageUrl,
+            youtubeId: song.id, // Save raw JioSaavn ID
           ));
         }
         return tracks;
       }
     } catch (e) {
       print("Error fetching from JioSaavn: $e");
+    }
+    return [];
+  }
+
+  Future<List<PlaylistRequest>> searchPlaylistsOnline(String query) async {
+    if (query.trim().isEmpty) return [];
+    try {
+      final response = await _jio.search.request(
+        call: 'search.getPlaylistResults',
+        queryParameters: {'q': query},
+      );
+      final req = PlaylistSearchRequest.fromJson(response);
+      return req.results;
+    } catch (e) {
+      print("Error searching playlists from JioSaavn: $e");
+    }
+    return [];
+  }
+
+  Future<List<Track>> getPlaylistTracks(String playlistId) async {
+    try {
+      final response = await _jio.search.request(
+        call: 'playlist.getDetails',
+        queryParameters: {'listid': playlistId},
+      );
+      final playlist = Playlist.fromJson(response);
+      final songIds = playlist.songs.map((s) => s.id!).toList();
+      if (songIds.isEmpty) return [];
+      
+      final List<SongResponse> detailedSongs = await _jio.songs.detailsById(songIds);
+      final List<Track> tracks = [];
+      final patterns = ['waves', 'vinyl', 'spheres', 'grid'];
+      final random = math.Random();
+      
+      for (var song in detailedSongs) {
+        String? streamUrl;
+        if (song.downloadUrl != null && song.downloadUrl!.isNotEmpty) {
+          streamUrl = song.downloadUrl!.last.link; // Highest quality
+        }
+        if (streamUrl == null) continue;
+        
+        String? imageUrl;
+        if (song.image != null && song.image!.isNotEmpty) {
+          imageUrl = song.image!.last.link; 
+        }
+        
+        String artistName = song.primaryArtists.isNotEmpty ? song.primaryArtists : 'Unknown Artist';
+        int durationSeconds = 0;
+        try {
+          durationSeconds = int.parse(song.duration);
+        } catch (_) {}
+
+        tracks.add(Track(
+          id: _generateStableId(song.id),
+          title: song.name ?? 'Unknown',
+          artist: artistName,
+          duration: _formatDuration(durationSeconds * 1000),
+          pattern: patterns[random.nextInt(patterns.length)],
+          primaryColor: const Color(0xFFE91E63),
+          secondaryColor: const Color(0xFFF48FB1),
+          isImported: false,
+          uri: streamUrl,
+          thumbnailUrl: imageUrl,
+          youtubeId: song.id, // Save raw JioSaavn ID
+        ));
+      }
+      return tracks;
+    } catch (e) {
+      print("Error fetching playlist tracks: $e");
+    }
+    return [];
+  }
+
+  Future<void> fetchRecommendations(String songId) async {
+    isLoadingRecommendations = true;
+    recommendedTracks = [];
+    notifyListeners();
+    try {
+      final res = await _jio.search.dio.get(
+        "/",
+        queryParameters: {
+          '__call': 'reco.getreco',
+          'pid': songId,
+          'api_version': 4,
+          '_format': 'json',
+          '_marker': '0',
+          'ctx': 'wap6dot0',
+        },
+      );
+      
+      var data = res.data;
+      if (data is String) {
+        data = jsonDecode(data);
+      }
+      
+      if (data is List && data.isNotEmpty) {
+        final List<Track> tracks = [];
+        final patterns = ['waves', 'vinyl', 'spheres', 'grid'];
+        final random = math.Random();
+        
+        for (var item in data) {
+          try {
+            final song = SongResponse.fromJson(item as Map<String, dynamic>);
+            
+            String? streamUrl;
+            if (song.downloadUrl != null && song.downloadUrl!.isNotEmpty) {
+              streamUrl = song.downloadUrl!.last.link;
+            }
+            if (streamUrl == null) continue;
+            
+            String? imageUrl;
+            if (song.image != null && song.image!.isNotEmpty) {
+              imageUrl = song.image!.last.link;
+            }
+            
+            String artistName = song.primaryArtists.isNotEmpty ? song.primaryArtists : 'Unknown Artist';
+            int durationSeconds = 0;
+            try {
+              durationSeconds = int.parse(song.duration);
+            } catch (_) {}
+
+            tracks.add(Track(
+              id: _generateStableId(song.id),
+              title: song.name ?? 'Unknown',
+              artist: artistName,
+              duration: _formatDuration(durationSeconds * 1000),
+              pattern: patterns[random.nextInt(patterns.length)],
+              primaryColor: const Color(0xFFE91E63),
+              secondaryColor: const Color(0xFFF48FB1),
+              isImported: false,
+              uri: streamUrl,
+              thumbnailUrl: imageUrl,
+              youtubeId: song.id, // Save raw JioSaavn ID
+            ));
+          } catch (e) {
+            print("Error parsing recommended song: $e");
+          }
+        }
+        recommendedTracks = tracks;
+      }
+    } catch (e) {
+      print("Error fetching recommendations: $e");
+    } finally {
+      isLoadingRecommendations = false;
+      notifyListeners();
+    }
+  }
+
+  Future<List<Track>> getRecommendationsForSong(String songId) async {
+    try {
+      final res = await _jio.search.dio.get(
+        "/",
+        queryParameters: {
+          '__call': 'reco.getreco',
+          'pid': songId,
+          'api_version': 4,
+          '_format': 'json',
+          '_marker': '0',
+          'ctx': 'wap6dot0',
+        },
+      );
+      
+      var data = res.data;
+      if (data is String) {
+        data = jsonDecode(data);
+      }
+      
+      if (data is List && data.isNotEmpty) {
+        final List<Track> tracks = [];
+        final patterns = ['waves', 'vinyl', 'spheres', 'grid'];
+        final random = math.Random();
+        
+        for (var item in data) {
+          try {
+            final song = SongResponse.fromJson(item as Map<String, dynamic>);
+            
+            String? streamUrl;
+            if (song.downloadUrl != null && song.downloadUrl!.isNotEmpty) {
+              streamUrl = song.downloadUrl!.last.link;
+            }
+            if (streamUrl == null) continue;
+            
+            String? imageUrl;
+            if (song.image != null && song.image!.isNotEmpty) {
+              imageUrl = song.image!.last.link;
+            }
+            
+            String artistName = song.primaryArtists.isNotEmpty ? song.primaryArtists : 'Unknown Artist';
+            int durationSeconds = 0;
+            try {
+              durationSeconds = int.parse(song.duration);
+            } catch (_) {}
+
+            tracks.add(Track(
+              id: _generateStableId(song.id),
+              title: song.name ?? 'Unknown',
+              artist: artistName,
+              duration: _formatDuration(durationSeconds * 1000),
+              pattern: patterns[random.nextInt(patterns.length)],
+              primaryColor: const Color(0xFFE91E63),
+              secondaryColor: const Color(0xFFF48FB1),
+              isImported: false,
+              uri: streamUrl,
+              thumbnailUrl: imageUrl,
+              youtubeId: song.id,
+            ));
+          } catch (_) {}
+        }
+        return tracks;
+      }
+    } catch (e) {
+      print("Error in getRecommendationsForSong: $e");
     }
     return [];
   }
@@ -485,6 +712,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> addTrackAndPlay(Track track) async {
+    await incrementPlayCount(track);
     final existingIndex = songsList.indexWhere((t) => t.id == track.id);
     if (existingIndex == -1) {
       songsList.insert(0, track);
@@ -505,6 +733,7 @@ class AppState extends ChangeNotifier {
   
   Future<void> playFromQueue(List<Track> queue, Track track) async {
     if (queue.isEmpty) return;
+    await incrementPlayCount(track);
     currentQueue = List.from(queue);
     playingTrackIndex = currentQueue.indexOf(track);
     if (playingTrackIndex == -1) playingTrackIndex = 0;
@@ -521,15 +750,19 @@ class AppState extends ChangeNotifier {
   
   Future<void> shuffleQueue(List<Track> queue) async {
     if (queue.isEmpty) return;
-    currentQueue = List.from(queue);
+    currentQueue = List.from(queue)..shuffle();
     isShuffle = true;
-    playingTrackIndex = math.Random().nextInt(currentQueue.length);
+    playingTrackIndex = 0;
+    
+    if (currentQueue.isNotEmpty) {
+      await incrementPlayCount(currentQueue[0]);
+    }
     
     if (audioPlayer.playing) await audioPlayer.pause();
     final source = _createConcatenatingSource(currentQueue);
-    await audioPlayer.setAudioSource(source, initialIndex: playingTrackIndex);
+    await audioPlayer.setAudioSource(source, initialIndex: 0);
     audioPlayer.setLoopMode(isRepeat ? LoopMode.one : LoopMode.all);
-    await audioPlayer.setShuffleModeEnabled(true);
+    await audioPlayer.setShuffleModeEnabled(false);
     audioPlayer.play();
     notifyListeners();
     _persistPlaybackState();
@@ -594,6 +827,13 @@ class AppState extends ChangeNotifier {
       final queueJson = currentQueue.map((track) => track.toJson()).toList();
       await prefs.setString('saved_queue', jsonEncode(queueJson));
       await prefs.setInt('saved_track_index', playingTrackIndex);
+      
+      if (currentQueue.isNotEmpty && playingTrackIndex >= 0 && playingTrackIndex < currentQueue.length) {
+        final current = currentQueue[playingTrackIndex];
+        if (current.youtubeId != null) {
+          await prefs.setString('last_online_track_id', current.youtubeId!);
+        }
+      }
     } catch (e) {
       print("Error persisting playback state: $e");
     }
@@ -632,6 +872,9 @@ class AppState extends ChangeNotifier {
       final savedIndex = prefs.getInt('saved_track_index');
       final savedPositionMs = prefs.getInt('saved_position_ms') ?? 0;
 
+      await _restoreRecentSearches();
+      await _restorePlayCounts();
+
       if (queueString != null && savedIndex != null) {
         final List<dynamic> queueList = jsonDecode(queueString);
         final restoredQueue = queueList.map((item) => Track.fromJson(item)).toList();
@@ -655,8 +898,95 @@ class AppState extends ChangeNotifier {
           notifyListeners();
         }
       }
+      
+      final lastOnlineId = prefs.getString('last_online_track_id');
+      if (lastOnlineId != null) {
+        fetchRecommendations(lastOnlineId);
+      } else {
+        fetchRecommendations('5WXAlMNt'); // Dynamite BTS default seed
+      }
     } catch (e) {
       print("Error restoring playback state: $e");
+    }
+  }
+
+  Future<void> addToRecentSearches(Track track) async {
+    recentSearches.removeWhere((t) => t.id == track.id);
+    recentSearches.insert(0, track);
+    if (recentSearches.length > 10) {
+      recentSearches = recentSearches.sublist(0, 10);
+    }
+    notifyListeners();
+    await _persistRecentSearches();
+  }
+
+  Future<void> clearRecentSearches() async {
+    recentSearches.clear();
+    notifyListeners();
+    await _persistRecentSearches();
+  }
+
+  Future<void> _persistRecentSearches() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonList = recentSearches.map((t) => t.toJson()).toList();
+      await prefs.setString('recent_searches', jsonEncode(jsonList));
+    } catch (e) {
+      print("Error persisting recent searches: $e");
+    }
+  }
+
+  Future<void> _restoreRecentSearches() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString('recent_searches');
+      if (jsonStr != null) {
+        final List<dynamic> jsonList = jsonDecode(jsonStr);
+        recentSearches = jsonList.map((item) => Track.fromJson(item)).toList();
+        notifyListeners();
+      }
+    } catch (e) {
+      print("Error restoring recent searches: $e");
+    }
+  }
+
+  Future<void> incrementPlayCount(Track track) async {
+    final key = track.id.toString();
+    playCounts[key] = (playCounts[key] ?? 0) + 1;
+    notifyListeners();
+    await _persistPlayCounts();
+  }
+
+  List<Track> searchLocalSongs(String query) {
+    if (query.trim().isEmpty) return songsList;
+    return SearchEngine.search(
+      query: query,
+      tracks: songsList,
+      playCounts: playCounts,
+      recentSearches: recentSearches,
+    );
+  }
+
+  Future<void> _persistPlayCounts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('play_counts', jsonEncode(playCounts));
+    } catch (e) {
+      print("Error persisting play counts: $e");
+    }
+  }
+
+  Future<void> _restorePlayCounts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString('play_counts');
+      if (jsonStr != null) {
+        final Map<String, dynamic> decoded = jsonDecode(jsonStr);
+        playCounts = decoded.map((key, value) => MapEntry(key, value as int));
+        notifyListeners();
+      }
+    } catch (e) {
+      print("Error restoring play counts: $e");
     }
   }
 

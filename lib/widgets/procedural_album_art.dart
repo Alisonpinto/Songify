@@ -37,20 +37,36 @@ class TrackThumbnail extends StatelessWidget {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.2),
+                color: Colors.black.withValues(alpha: 0.2),
                 blurRadius: 8,
                 offset: const Offset(0, 4),
               ),
             ],
           ),
-          alignment: Alignment.center,
-          child: Icon(
-            Icons.audiotrack_rounded,
-            color: isPlaying ? AppTheme.primaryYellow : AppTheme.textSecondary,
-            size: actualSize * 0.45,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: track.thumbnailUrl != null && track.thumbnailUrl!.isNotEmpty
+                ? Image.network(
+                    track.thumbnailUrl!,
+                    width: actualSize,
+                    height: actualSize,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => _buildPlaceholder(actualSize),
+                  )
+                : _buildPlaceholder(actualSize),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildPlaceholder(double actualSize) {
+    return Center(
+      child: Icon(
+        Icons.audiotrack_rounded,
+        color: isPlaying ? AppTheme.primaryYellow : AppTheme.textSecondary,
+        size: actualSize * 0.45,
+      ),
     );
   }
 }

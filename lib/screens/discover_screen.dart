@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:provider/provider.dart';
+import 'package:jiosaavn/jiosaavn.dart' show PlaylistRequest;
 import '../providers/app_state.dart';
 import '../models/track.dart';
 import '../theme.dart';
 import '../widgets/procedural_album_art.dart';
 import '../widgets/add_to_album_sheet.dart';
+import 'playlist_detail_screen.dart';
 
 class DiscoverScreen extends StatefulWidget {
   const DiscoverScreen({super.key});
@@ -17,6 +19,8 @@ class DiscoverScreen extends StatefulWidget {
 class _DiscoverScreenState extends State<DiscoverScreen> {
   final TextEditingController _searchController = TextEditingController();
   List<Track> _searchResults = [];
+  List<PlaylistRequest> _playlistResults = [];
+  String _searchType = "songs"; // "songs" or "playlists"
   bool _isLoading = false;
   Timer? _debounce;
 
@@ -31,6 +35,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     if (query.trim().isEmpty) {
       setState(() {
         _searchResults = [];
+        _playlistResults = [];
       });
       return;
     }
@@ -40,14 +45,121 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     });
 
     final state = Provider.of<AppState>(context, listen: false);
-    final results = await state.searchOnline(query);
-
-    if (mounted) {
-      setState(() {
-        _searchResults = results;
-        _isLoading = false;
-      });
+    
+    if (_searchType == "songs") {
+      final results = await state.searchOnline(query);
+      if (mounted) {
+        setState(() {
+          _searchResults = results;
+          _playlistResults = [];
+          _isLoading = false;
+        });
+      }
+    } else {
+      final results = await state.searchPlaylistsOnline(query);
+      if (mounted) {
+        setState(() {
+          _playlistResults = results;
+          _searchResults = [];
+          _isLoading = false;
+        });
+      }
     }
+  }
+
+  Widget _buildRecentSearchesSection(BuildContext context, AppState state) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              "Recent Searches",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                state.clearRecentSearches();
+              },
+              child: const Text(
+                "Clear All",
+                style: TextStyle(
+                  color: AppTheme.primaryYellow,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: ListView.separated(
+            itemCount: state.recentSearches.length,
+            separatorBuilder: (context, index) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final track = state.recentSearches[index];
+              final isPlaying = state.currentTrack.id == track.id && state.isPlaying;
+
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: TrackThumbnail(
+                  track: track,
+                  isPlaying: isPlaying,
+                  size: 48,
+                ),
+                title: Text(
+                  track.title,
+                  style: TextStyle(
+                    color: isPlaying ? AppTheme.primaryYellow : AppTheme.textPrimary,
+                    fontWeight: isPlaying ? FontWeight.bold : FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  track.artist,
+                  style: const TextStyle(color: AppTheme.textSecondary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.search_rounded, color: AppTheme.textSecondary),
+                      tooltip: "Search again",
+                      onPressed: () {
+                        _searchController.text = track.title;
+                        _performSearch(track.title);
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.textSecondary),
+                      tooltip: "Add to album",
+                      onPressed: () {
+                        showAddToAlbumSheet(context, track, state);
+                      },
+                    ),
+                  ],
+                ),
+                onTap: () {
+                  state.addToRecentSearches(track);
+                  state.addTrackAndPlay(track);
+                },
+                onLongPress: () {
+                  showAddToAlbumSheet(context, track, state);
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -75,7 +187,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                   controller: _searchController,
                   style: const TextStyle(color: AppTheme.textPrimary),
                   decoration: InputDecoration(
-                    hintText: "Search online for any song...",
+                    hintText: _searchType == "songs" ? "Search online for any song..." : "Search online for public playlists...",
                     hintStyle: const TextStyle(color: AppTheme.textMuted),
                     prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.textSecondary),
                     suffixIcon: _searchController.text.isNotEmpty 
@@ -112,62 +224,169 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                     });
                   },
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    ChoiceChip(
+                      label: const Text("Songs"),
+                      selected: _searchType == "songs",
+                      selectedColor: AppTheme.primaryYellow,
+                      backgroundColor: AppTheme.darkCard,
+                      labelStyle: TextStyle(
+                        color: _searchType == "songs" ? Colors.black : AppTheme.textPrimary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      onSelected: (selected) {
+                        if (selected) {
+                          setState(() {
+                            _searchType = "songs";
+                            _performSearch(_searchController.text);
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text("Playlists"),
+                      selected: _searchType == "playlists",
+                      selectedColor: AppTheme.primaryYellow,
+                      backgroundColor: AppTheme.darkCard,
+                      labelStyle: TextStyle(
+                        color: _searchType == "playlists" ? Colors.black : AppTheme.textPrimary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      onSelected: (selected) {
+                        if (selected) {
+                          setState(() {
+                            _searchType = "playlists";
+                            _performSearch(_searchController.text);
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
                 Expanded(
                   child: _isLoading
                       ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryYellow))
-                      : _searchResults.isEmpty
-                          ? const Center(
-                              child: Text(
-                                "Search for tracks online completely ad-free.",
-                                style: TextStyle(color: AppTheme.textSecondary),
-                                textAlign: TextAlign.center,
-                              ),
-                            )
-                          : ListView.separated(
-                              itemCount: _searchResults.length,
-                              separatorBuilder: (context, index) => const SizedBox(height: 8),
-                              itemBuilder: (context, index) {
-                                final track = _searchResults[index];
-                                final isPlaying = state.currentTrack.id == track.id && state.isPlaying;
+                      : _searchType == "songs"
+                          ? (_searchController.text.trim().isEmpty && state.recentSearches.isNotEmpty)
+                              ? _buildRecentSearchesSection(context, state)
+                              : _searchResults.isEmpty
+                                  ? const Center(
+                                      child: Text(
+                                        "Search for tracks online completely ad-free.",
+                                        style: TextStyle(color: AppTheme.textSecondary),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    )
+                              : ListView.separated(
+                                  itemCount: _searchResults.length,
+                                  separatorBuilder: (context, index) => const SizedBox(height: 8),
+                                  itemBuilder: (context, index) {
+                                    final track = _searchResults[index];
+                                    final isPlaying = state.currentTrack.id == track.id && state.isPlaying;
 
-                                return ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: TrackThumbnail(
-                                    track: track, 
-                                    isPlaying: isPlaying,
-                                    size: 48,
-                                  ),
-                                  title: Text(
-                                    track.title,
-                                    style: TextStyle(
-                                      color: isPlaying ? AppTheme.primaryYellow : AppTheme.textPrimary,
-                                      fontWeight: isPlaying ? FontWeight.bold : FontWeight.w600,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  subtitle: Text(
-                                    track.artist,
-                                    style: const TextStyle(color: AppTheme.textSecondary),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  trailing: IconButton(
-                                    icon: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.textSecondary),
-                                    onPressed: () {
-                                      showAddToAlbumSheet(context, track, state);
-                                    },
-                                  ),
-                                  onTap: () {
-                                    state.addTrackAndPlay(track);
+                                    return ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      leading: TrackThumbnail(
+                                        track: track, 
+                                        isPlaying: isPlaying,
+                                        size: 48,
+                                      ),
+                                      title: Text(
+                                        track.title,
+                                        style: TextStyle(
+                                          color: isPlaying ? AppTheme.primaryYellow : AppTheme.textPrimary,
+                                          fontWeight: isPlaying ? FontWeight.bold : FontWeight.w600,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      subtitle: Text(
+                                        track.artist,
+                                        style: const TextStyle(color: AppTheme.textSecondary),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      trailing: IconButton(
+                                        icon: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.textSecondary),
+                                        onPressed: () {
+                                          showAddToAlbumSheet(context, track, state);
+                                        },
+                                      ),
+                                      onTap: () {
+                                        state.addToRecentSearches(track);
+                                        state.addTrackAndPlay(track);
+                                      },
+                                      onLongPress: () {
+                                        showAddToAlbumSheet(context, track, state);
+                                      },
+                                    );
                                   },
-                                  onLongPress: () {
-                                    showAddToAlbumSheet(context, track, state);
+                                )
+                          : _playlistResults.isEmpty
+                              ? const Center(
+                                  child: Text(
+                                    "Search for public playlists online.",
+                                    style: TextStyle(color: AppTheme.textSecondary),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                )
+                              : ListView.separated(
+                                  itemCount: _playlistResults.length,
+                                  separatorBuilder: (context, index) => const SizedBox(height: 8),
+                                  itemBuilder: (context, index) {
+                                    final playlist = _playlistResults[index];
+                                    return ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      leading: ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Image.network(
+                                          playlist.image,
+                                          width: 48,
+                                          height: 48,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) => Container(
+                                            width: 48,
+                                            height: 48,
+                                            color: AppTheme.darkCard,
+                                            child: const Icon(Icons.playlist_play_rounded, color: AppTheme.primaryYellow),
+                                          ),
+                                        ),
+                                      ),
+                                      title: Text(
+                                        playlist.listname,
+                                        style: const TextStyle(
+                                          color: AppTheme.textPrimary,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      subtitle: Text(
+                                        "${playlist.firstname.isNotEmpty ? 'By ${playlist.firstname}' : 'JioSaavn Playlist'} • ${playlist.listCount.isNotEmpty ? playlist.listCount : playlist.count} songs",
+                                        style: const TextStyle(color: AppTheme.textSecondary),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      trailing: const Icon(Icons.chevron_right_rounded, color: AppTheme.textSecondary),
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => PlaylistDetailScreen(
+                                              playlistId: playlist.listid,
+                                              playlistName: playlist.listname,
+                                              imageUrl: playlist.image,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    );
                                   },
-                                );
-                              },
-                            ),
+                                ),
                 ),
               ],
             ),
