@@ -1,1 +1,11 @@
-import 'package:jiosaavn/jiosaavn.dart'; void main() async { var jio = JioSaavnClient(); var search = await jio.search.songs('believer'); print(search?.results?.length); if (search != null && search.results!.isNotEmpty) { var songs = await jio.songs.detailsById([search.results![0].id]); print(songs[0].name); print(songs[0].downloadUrl?.last.link); } }
+// import 'package:jiosaavn/jiosaavn.dart'; 
+// void main() async { 
+//   var jio = JioSaavnClient(); 
+//   var search = await jio.search.songs('believer'); 
+//   print(search?.results?.length); 
+//   if (search != null && search.results!.isNotEmpty) { 
+//     var songs = await jio.songs.detailsById([search.results![0].id]); 
+//     print(songs[0].name); 
+//     print(songs[0].downloadUrl?.last.link); 
+//   } 
+// }

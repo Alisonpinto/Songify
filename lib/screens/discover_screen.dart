@@ -20,7 +20,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   final TextEditingController _searchController = TextEditingController();
   List<Track> _searchResults = [];
   List<PlaylistRequest> _playlistResults = [];
-  String _searchType = "songs"; // "songs" or "playlists"
+  String _searchType = "all"; // "all", "songs", or "playlists"
   bool _isLoading = false;
   Timer? _debounce;
 
@@ -46,21 +46,41 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
     final state = Provider.of<AppState>(context, listen: false);
     
-    if (_searchType == "songs") {
-      final results = await state.searchOnline(query);
-      if (mounted) {
-        setState(() {
-          _searchResults = results;
-          _playlistResults = [];
-          _isLoading = false;
-        });
+    try {
+      if (_searchType == "all") {
+        final results = await Future.wait([
+          state.searchOnline(query),
+          state.searchPlaylistsOnline(query),
+        ]);
+        if (mounted) {
+          setState(() {
+            _searchResults = results[0] as List<Track>;
+            _playlistResults = results[1] as List<PlaylistRequest>;
+            _isLoading = false;
+          });
+        }
+      } else if (_searchType == "songs") {
+        final results = await state.searchOnline(query);
+        if (mounted) {
+          setState(() {
+            _searchResults = results;
+            _playlistResults = [];
+            _isLoading = false;
+          });
+        }
+      } else {
+        final results = await state.searchPlaylistsOnline(query);
+        if (mounted) {
+          setState(() {
+            _playlistResults = results;
+            _searchResults = [];
+            _isLoading = false;
+          });
+        }
       }
-    } else {
-      final results = await state.searchPlaylistsOnline(query);
+    } catch (_) {
       if (mounted) {
         setState(() {
-          _playlistResults = results;
-          _searchResults = [];
           _isLoading = false;
         });
       }
@@ -162,6 +182,138 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     );
   }
 
+  Widget _buildUnifiedSearchResults(AppState state) {
+    if (_searchResults.isEmpty && _playlistResults.isEmpty) {
+      return const Center(
+        child: Text(
+          "Search for songs and JioSaavn playlists online.",
+          style: TextStyle(color: AppTheme.textSecondary),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    return ListView(
+      physics: const BouncingScrollPhysics(),
+      children: [
+        if (_searchResults.isNotEmpty) ...[
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12.0),
+            child: Text(
+              "Songs",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ),
+          ..._searchResults.map((track) {
+            final isPlaying = state.currentTrack.id == track.id && state.isPlaying;
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: TrackThumbnail(
+                track: track, 
+                isPlaying: isPlaying,
+                size: 48,
+              ),
+              title: Text(
+                track.title,
+                style: TextStyle(
+                  color: isPlaying ? AppTheme.primaryYellow : AppTheme.textPrimary,
+                  fontWeight: isPlaying ? FontWeight.bold : FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                track.artist,
+                style: const TextStyle(color: AppTheme.textSecondary),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.textSecondary),
+                onPressed: () {
+                  showAddToAlbumSheet(context, track, state);
+                },
+              ),
+              onTap: () {
+                state.addToRecentSearches(track);
+                state.addTrackAndPlay(track);
+              },
+              onLongPress: () {
+                showAddToAlbumSheet(context, track, state);
+              },
+            );
+          }).toList(),
+        ],
+        if (_playlistResults.isNotEmpty) ...[
+          const Padding(
+            padding: EdgeInsets.only(top: 24.0, bottom: 12.0),
+            child: Text(
+              "JioSaavn Playlists",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ),
+          ..._playlistResults.map((playlist) {
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  playlist.image,
+                  width: 48,
+                  height: 48,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    width: 48,
+                    height: 48,
+                    color: AppTheme.darkCard,
+                    child: const Icon(Icons.playlist_play_rounded, color: AppTheme.primaryYellow),
+                  ),
+                ),
+              ),
+              title: Text(
+                playlist.listname,
+                style: const TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                "${playlist.firstname.isNotEmpty ? 'By ${playlist.firstname}' : 'JioSaavn Playlist'} • ${playlist.listCount.isNotEmpty ? playlist.listCount : playlist.count} songs",
+                style: const TextStyle(color: AppTheme.textSecondary),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded, color: AppTheme.textSecondary),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => PlaylistDetailScreen(
+                      playlistId: playlist.listid,
+                      playlistName: playlist.listname,
+                      imageUrl: playlist.image,
+                    ),
+                  ),
+                );
+              },
+            );
+          }).toList(),
+        ],
+        const SizedBox(height: 32),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<AppState>(
@@ -187,7 +339,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                   controller: _searchController,
                   style: const TextStyle(color: AppTheme.textPrimary),
                   decoration: InputDecoration(
-                    hintText: _searchType == "songs" ? "Search online for any song..." : "Search online for public playlists...",
+                    hintText: _searchType == "all" ? "Search for songs and playlists..." : (_searchType == "songs" ? "Search online for any song..." : "Search online for public playlists..."),
                     hintStyle: const TextStyle(color: AppTheme.textMuted),
                     prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.textSecondary),
                     suffixIcon: _searchController.text.isNotEmpty 
@@ -227,6 +379,25 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
+                    ChoiceChip(
+                      label: const Text("All"),
+                      selected: _searchType == "all",
+                      selectedColor: AppTheme.primaryYellow,
+                      backgroundColor: AppTheme.darkCard,
+                      labelStyle: TextStyle(
+                        color: _searchType == "all" ? Colors.black : AppTheme.textPrimary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      onSelected: (selected) {
+                        if (selected) {
+                          setState(() {
+                            _searchType = "all";
+                            _performSearch(_searchController.text);
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 8),
                     ChoiceChip(
                       label: const Text("Songs"),
                       selected: _searchType == "songs",
@@ -270,123 +441,125 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                 Expanded(
                   child: _isLoading
                       ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryYellow))
-                      : _searchType == "songs"
-                          ? (_searchController.text.trim().isEmpty && state.recentSearches.isNotEmpty)
-                              ? _buildRecentSearchesSection(context, state)
-                              : _searchResults.isEmpty
-                                  ? const Center(
-                                      child: Text(
-                                        "Search for tracks online completely ad-free.",
-                                        style: TextStyle(color: AppTheme.textSecondary),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    )
-                              : ListView.separated(
-                                  itemCount: _searchResults.length,
-                                  separatorBuilder: (context, index) => const SizedBox(height: 8),
-                                  itemBuilder: (context, index) {
-                                    final track = _searchResults[index];
-                                    final isPlaying = state.currentTrack.id == track.id && state.isPlaying;
+                      : (_searchController.text.trim().isEmpty && state.recentSearches.isNotEmpty)
+                          ? _buildRecentSearchesSection(context, state)
+                          : _searchType == "all"
+                              ? _buildUnifiedSearchResults(state)
+                              : _searchType == "songs"
+                                  ? _searchResults.isEmpty
+                                      ? const Center(
+                                          child: Text(
+                                            "Search for tracks online completely ad-free.",
+                                            style: TextStyle(color: AppTheme.textSecondary),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        )
+                                      : ListView.separated(
+                                          itemCount: _searchResults.length,
+                                          separatorBuilder: (context, index) => const SizedBox(height: 8),
+                                          itemBuilder: (context, index) {
+                                            final track = _searchResults[index];
+                                            final isPlaying = state.currentTrack.id == track.id && state.isPlaying;
 
-                                    return ListTile(
-                                      contentPadding: EdgeInsets.zero,
-                                      leading: TrackThumbnail(
-                                        track: track, 
-                                        isPlaying: isPlaying,
-                                        size: 48,
-                                      ),
-                                      title: Text(
-                                        track.title,
-                                        style: TextStyle(
-                                          color: isPlaying ? AppTheme.primaryYellow : AppTheme.textPrimary,
-                                          fontWeight: isPlaying ? FontWeight.bold : FontWeight.w600,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      subtitle: Text(
-                                        track.artist,
-                                        style: const TextStyle(color: AppTheme.textSecondary),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      trailing: IconButton(
-                                        icon: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.textSecondary),
-                                        onPressed: () {
-                                          showAddToAlbumSheet(context, track, state);
-                                        },
-                                      ),
-                                      onTap: () {
-                                        state.addToRecentSearches(track);
-                                        state.addTrackAndPlay(track);
-                                      },
-                                      onLongPress: () {
-                                        showAddToAlbumSheet(context, track, state);
-                                      },
-                                    );
-                                  },
-                                )
-                          : _playlistResults.isEmpty
-                              ? const Center(
-                                  child: Text(
-                                    "Search for public playlists online.",
-                                    style: TextStyle(color: AppTheme.textSecondary),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                )
-                              : ListView.separated(
-                                  itemCount: _playlistResults.length,
-                                  separatorBuilder: (context, index) => const SizedBox(height: 8),
-                                  itemBuilder: (context, index) {
-                                    final playlist = _playlistResults[index];
-                                    return ListTile(
-                                      contentPadding: EdgeInsets.zero,
-                                      leading: ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: Image.network(
-                                          playlist.image,
-                                          width: 48,
-                                          height: 48,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (context, error, stackTrace) => Container(
-                                            width: 48,
-                                            height: 48,
-                                            color: AppTheme.darkCard,
-                                            child: const Icon(Icons.playlist_play_rounded, color: AppTheme.primaryYellow),
+                                            return ListTile(
+                                              contentPadding: EdgeInsets.zero,
+                                              leading: TrackThumbnail(
+                                                track: track, 
+                                                isPlaying: isPlaying,
+                                                size: 48,
+                                              ),
+                                              title: Text(
+                                                track.title,
+                                                style: TextStyle(
+                                                  color: isPlaying ? AppTheme.primaryYellow : AppTheme.textPrimary,
+                                                  fontWeight: isPlaying ? FontWeight.bold : FontWeight.w600,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              subtitle: Text(
+                                                track.artist,
+                                                style: const TextStyle(color: AppTheme.textSecondary),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              trailing: IconButton(
+                                                icon: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.textSecondary),
+                                                onPressed: () {
+                                                  showAddToAlbumSheet(context, track, state);
+                                                },
+                                              ),
+                                              onTap: () {
+                                                state.addToRecentSearches(track);
+                                                state.addTrackAndPlay(track);
+                                              },
+                                              onLongPress: () {
+                                                showAddToAlbumSheet(context, track, state);
+                                              },
+                                            );
+                                          },
+                                        )
+                                  : _playlistResults.isEmpty
+                                      ? const Center(
+                                          child: Text(
+                                            "Search for public playlists online.",
+                                            style: TextStyle(color: AppTheme.textSecondary),
+                                            textAlign: TextAlign.center,
                                           ),
+                                        )
+                                      : ListView.separated(
+                                          itemCount: _playlistResults.length,
+                                          separatorBuilder: (context, index) => const SizedBox(height: 8),
+                                          itemBuilder: (context, index) {
+                                            final playlist = _playlistResults[index];
+                                            return ListTile(
+                                              contentPadding: EdgeInsets.zero,
+                                              leading: ClipRRect(
+                                                borderRadius: BorderRadius.circular(8),
+                                                child: Image.network(
+                                                  playlist.image,
+                                                  width: 48,
+                                                  height: 48,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder: (context, error, stackTrace) => Container(
+                                                    width: 48,
+                                                    height: 48,
+                                                    color: AppTheme.darkCard,
+                                                    child: const Icon(Icons.playlist_play_rounded, color: AppTheme.primaryYellow),
+                                                  ),
+                                                ),
+                                              ),
+                                              title: Text(
+                                                playlist.listname,
+                                                style: const TextStyle(
+                                                  color: AppTheme.textPrimary,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              subtitle: Text(
+                                                "${playlist.firstname.isNotEmpty ? 'By ${playlist.firstname}' : 'JioSaavn Playlist'} • ${playlist.listCount.isNotEmpty ? playlist.listCount : playlist.count} songs",
+                                                style: const TextStyle(color: AppTheme.textSecondary),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              trailing: const Icon(Icons.chevron_right_rounded, color: AppTheme.textSecondary),
+                                              onTap: () {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (context) => PlaylistDetailScreen(
+                                                      playlistId: playlist.listid,
+                                                      playlistName: playlist.listname,
+                                                      imageUrl: playlist.image,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                            );
+                                          },
                                         ),
-                                      ),
-                                      title: Text(
-                                        playlist.listname,
-                                        style: const TextStyle(
-                                          color: AppTheme.textPrimary,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      subtitle: Text(
-                                        "${playlist.firstname.isNotEmpty ? 'By ${playlist.firstname}' : 'JioSaavn Playlist'} • ${playlist.listCount.isNotEmpty ? playlist.listCount : playlist.count} songs",
-                                        style: const TextStyle(color: AppTheme.textSecondary),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      trailing: const Icon(Icons.chevron_right_rounded, color: AppTheme.textSecondary),
-                                      onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) => PlaylistDetailScreen(
-                                              playlistId: playlist.listid,
-                                              playlistName: playlist.listname,
-                                              imageUrl: playlist.image,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    );
-                                  },
-                                ),
                 ),
               ],
             ),

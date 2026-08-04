@@ -149,12 +149,30 @@ class NowPlayingScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                    IconButton(
-                      iconSize: 28,
-                      icon: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.textSecondary),
-                      onPressed: () {
-                        showAddToAlbumSheet(context, track, state);
-                      },
+                    Row(
+                      children: [
+                        IconButton(
+                          iconSize: 28,
+                          icon: Icon(
+                            state.isLiked(track.id)
+                                ? Icons.favorite_rounded
+                                : Icons.favorite_border_rounded,
+                            color: state.isLiked(track.id)
+                                ? AppTheme.primaryYellow
+                                : AppTheme.textSecondary,
+                          ),
+                          onPressed: () {
+                            state.toggleLikeTrack(track);
+                          },
+                        ),
+                        IconButton(
+                          iconSize: 28,
+                          icon: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.textSecondary),
+                          onPressed: () {
+                            showAddToAlbumSheet(context, track, state);
+                          },
+                        ),
+                      ],
                     ),
                   ],
                 ),

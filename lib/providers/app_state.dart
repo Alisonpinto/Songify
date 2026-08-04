@@ -12,6 +12,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/recommendation_service.dart';
 
 class AppState extends ChangeNotifier {
   int currentTab = 0; // 0 = Home, 1 = Library, 2 = Now Playing
@@ -42,6 +43,23 @@ class AppState extends ChangeNotifier {
   List<Track> recommendedTracks = [];
   bool isLoadingRecommendations = false;
   
+  // Recommendation Service & Shelf Lists
+  final RecommendationService _recommendationService = RecommendationService();
+  List<Track> continueListeningTracks = [];
+  List<Track> becauseYouLikedTracks = [];
+  List<Track> trendingTracks = [];
+  List<Track> moreFromArtistTracks = [];
+  List<Track> topTracks = [];
+  List<Track> discoverTracks = [];
+  List<Track> recentlyPlayedTracks = [];
+  List<Track> similarGenreTracks = [];
+  List<Track> usersAlsoListenToTracks = [];
+  bool isLoadingShelves = false;
+
+  final Set<int> _likedTrackIds = {};
+  Track? _lastTrack;
+  double _lastTrackProgress = 0.0;
+  
   List<Track> recentSearches = [];
   Map<String, int> playCounts = {};
   
@@ -53,6 +71,7 @@ class AppState extends ChangeNotifier {
   StreamSubscription? _positionSub;
   StreamSubscription? _durationSub;
   StreamSubscription? _playerStateSub;
+  StreamSubscription? _processingStateSub;
   
   Duration? _currentDuration;
   final _supabase = Supabase.instance.client;
@@ -90,12 +109,19 @@ class AppState extends ChangeNotifier {
     _positionSub = audioPlayer.positionStream.listen((position) {
       if (_currentDuration != null && _currentDuration!.inMilliseconds > 0) {
         trackProgress = position.inMilliseconds / _currentDuration!.inMilliseconds;
+        _lastTrackProgress = trackProgress;
         notifyListeners();
       }
       final now = DateTime.now();
       if (now.difference(lastSavedTime).inSeconds >= 3) {
         lastSavedTime = now;
         _persistPosition(position.inMilliseconds);
+        
+        // Log playing activity periodically to save position for Continue Listening
+        if (isLoggedIn && currentQueue.isNotEmpty && playingTrackIndex < currentQueue.length) {
+          final current = currentQueue[playingTrackIndex];
+          _recommendationService.logActivity(current, 'play', positionMs: position.inMilliseconds);
+        }
       }
     });
     
@@ -111,15 +137,43 @@ class AppState extends ChangeNotifier {
       }
     });
 
+    _processingStateSub = audioPlayer.processingStateStream.listen((processingState) {
+      if (processingState == ProcessingState.completed) {
+        if (isLoggedIn && _lastTrack != null) {
+          _recommendationService.logActivity(_lastTrack!, 'complete');
+          _lastTrack = null;
+          _lastTrackProgress = 0.0;
+          updateRecommendationShelves();
+        }
+      }
+    });
+
     audioPlayer.currentIndexStream.listen((index) {
       if (index != null && currentQueue.isNotEmpty && index < currentQueue.length) {
+        final nextTrack = currentQueue[index];
+
+        // Track skips vs completions on transition
+        if (isLoggedIn && _lastTrack != null && _lastTrack!.id != nextTrack.id) {
+          if (_lastTrackProgress >= 0.95) {
+            _recommendationService.logActivity(_lastTrack!, 'complete');
+          } else {
+            _recommendationService.logActivity(_lastTrack!, 'skip', positionMs: audioPlayer.position.inMilliseconds);
+          }
+        }
+
         playingTrackIndex = index;
+        _lastTrack = nextTrack;
+        _lastTrackProgress = 0.0;
         notifyListeners();
         _persistPlaybackState();
         
-        final track = currentQueue[index];
-        if (track.youtubeId != null) {
-          fetchRecommendations(track.youtubeId!);
+        if (isLoggedIn) {
+          _recommendationService.logActivity(nextTrack, 'play');
+          updateRecommendationShelves();
+        }
+        
+        if (nextTrack.youtubeId != null) {
+          fetchRecommendations(nextTrack.youtubeId!);
         }
       }
     });
@@ -139,6 +193,19 @@ class AppState extends ChangeNotifier {
         
         // Remove non-local tracks from memory if they log out
         songsList.removeWhere((track) => !track.isImported);
+        
+        // Clear recommendation shelves
+        continueListeningTracks.clear();
+        becauseYouLikedTracks.clear();
+        trendingTracks.clear();
+        moreFromArtistTracks.clear();
+        topTracks.clear();
+        discoverTracks.clear();
+        recentlyPlayedTracks.clear();
+        similarGenreTracks.clear();
+        usersAlsoListenToTracks.clear();
+        _likedTrackIds.clear();
+        
         notifyListeners();
         return;
       }
@@ -161,7 +228,26 @@ class AppState extends ChangeNotifier {
         } catch (e) {
           print("Error fetching user data: $e");
         }
+
+        // Fetch Liked Track IDs
+        try {
+          final likedResponse = await _supabase
+              .from('user_song_stats')
+              .select('track_id')
+              .eq('user_id', currentUser.id)
+              .eq('is_liked', true);
+          _likedTrackIds.clear();
+          for (var row in likedResponse) {
+            _likedTrackIds.add((row['track_id'] as num).toInt());
+          }
+        } catch (e) {
+          print("Error fetching liked track IDs: $e");
+        }
+        
         notifyListeners(); // Update UI with user info immediately
+        
+        // Refresh shelves
+        updateRecommendationShelves();
       }
 
       // 2. Fetch albums for this user
@@ -385,6 +471,11 @@ class AppState extends ChangeNotifier {
           'album_name': albumName,
           'track_id': track.id
         });
+
+        // Log activity
+        await _recommendationService.logActivity(track, 'playlist_add');
+        updateRecommendationShelves();
+        
         return true;
       } catch (e) {
         print("Error adding track to album: $e");
@@ -405,6 +496,10 @@ class AppState extends ChangeNotifier {
             .delete()
             .eq('album_name', albumName)
             .eq('track_id', track.id);
+        
+        // Log activity
+        await _recommendationService.logActivity(track, 'playlist_remove');
+        updateRecommendationShelves();
       } catch (e) {
         print("Error removing track from album: $e");
       }
@@ -874,6 +969,7 @@ class AppState extends ChangeNotifier {
 
       await _restoreRecentSearches();
       await _restorePlayCounts();
+      await _restoreRecommendationShelves();
 
       if (queueString != null && savedIndex != null) {
         final List<dynamic> queueList = jsonDecode(queueString);
@@ -882,6 +978,7 @@ class AppState extends ChangeNotifier {
         if (restoredQueue.isNotEmpty && savedIndex >= 0 && savedIndex < restoredQueue.length) {
           currentQueue = restoredQueue;
           playingTrackIndex = savedIndex;
+          _lastTrack = currentQueue[playingTrackIndex];
           
           final source = _createConcatenatingSource(currentQueue);
           await audioPlayer.setAudioSource(
@@ -910,6 +1007,137 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  // Recommendation caching helper methods
+  Future<void> _restoreRecommendationShelves() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      List<Track> restoreShelf(String key) {
+        final jsonStr = prefs.getString(key);
+        if (jsonStr == null) return [];
+        final List<dynamic> decoded = jsonDecode(jsonStr);
+        return decoded.map((item) => Track.fromJson(item)).toList();
+      }
+
+      continueListeningTracks = restoreShelf('shelf_continue_listening');
+      becauseYouLikedTracks = restoreShelf('shelf_because_you_liked');
+      trendingTracks = restoreShelf('shelf_trending');
+      moreFromArtistTracks = restoreShelf('shelf_more_from_artist');
+      topTracks = restoreShelf('shelf_top_songs');
+      discoverTracks = restoreShelf('shelf_discover');
+      recentlyPlayedTracks = restoreShelf('shelf_recently_played');
+      similarGenreTracks = restoreShelf('shelf_similar_genre');
+      usersAlsoListenToTracks = restoreShelf('shelf_users_also_listen_to');
+      
+      notifyListeners();
+    } catch (e) {
+      print("Error restoring recommendation shelves: $e");
+    }
+  }
+
+  Future<void> _persistRecommendationShelves() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      Future<void> saveShelf(String key, List<Track> tracks) async {
+        final jsonStr = jsonEncode(tracks.map((t) => t.toJson()).toList());
+        await prefs.setString(key, jsonStr);
+      }
+
+      await saveShelf('shelf_continue_listening', continueListeningTracks);
+      await saveShelf('shelf_because_you_liked', becauseYouLikedTracks);
+      await saveShelf('shelf_trending', trendingTracks);
+      await saveShelf('shelf_more_from_artist', moreFromArtistTracks);
+      await saveShelf('shelf_top_songs', topTracks);
+      await saveShelf('shelf_discover', discoverTracks);
+      await saveShelf('shelf_recently_played', recentlyPlayedTracks);
+      await saveShelf('shelf_similar_genre', similarGenreTracks);
+      await saveShelf('shelf_users_also_listen_to', usersAlsoListenToTracks);
+    } catch (e) {
+      print("Error persisting recommendation shelves: $e");
+    }
+  }
+
+  Future<void> updateRecommendationShelves() async {
+    final currentUid = userId;
+    if (currentUid == null) return;
+    
+    isLoadingShelves = true;
+    notifyListeners();
+    
+    try {
+      final continueFuture = _recommendationService.getContinueListening(currentUid);
+      final becauseLikedFuture = _recommendationService.getBecauseYouLiked(currentUid);
+      final topSongsFuture = _recommendationService.getTopSongs(currentUid);
+      final recentlyPlayedFuture = _recommendationService.getRecentlyPlayed(currentUid);
+      final trendingFuture = _recommendationService.getTrendingSongs();
+      final artistFuture = _recommendationService.getSongsByArtist(currentUid, songsList);
+      final genreFuture = _recommendationService.getSongsByGenre(currentUid, songsList);
+      final discoverFuture = _recommendationService.getDiscoverSongs(currentUid, songsList);
+      final usersAlsoFuture = _recommendationService.getUsersAlsoListenTo(currentUid);
+      
+      final results = await Future.wait([
+        continueFuture,
+        becauseLikedFuture,
+        topSongsFuture,
+        recentlyPlayedFuture,
+        trendingFuture,
+        artistFuture,
+        genreFuture,
+        discoverFuture,
+        usersAlsoFuture,
+      ]);
+      
+      continueListeningTracks = results[0];
+      becauseYouLikedTracks = results[1];
+      topTracks = results[2];
+      recentlyPlayedTracks = results[3];
+      trendingTracks = results[4];
+      moreFromArtistTracks = results[5];
+      similarGenreTracks = results[6];
+      discoverTracks = results[7];
+      usersAlsoListenToTracks = results[8];
+      
+      await _persistRecommendationShelves();
+    } catch (e) {
+      print("Error updating recommendation shelves: $e");
+    } finally {
+      isLoadingShelves = false;
+      notifyListeners();
+    }
+  }
+
+  bool isLiked(int trackId) => _likedTrackIds.contains(trackId);
+
+  Future<void> toggleLikeTrack(Track track) async {
+    if (!isLoggedIn) return;
+    final likeStatus = !_likedTrackIds.contains(track.id);
+    
+    if (likeStatus) {
+      _likedTrackIds.add(track.id);
+    } else {
+      _likedTrackIds.remove(track.id);
+    }
+    notifyListeners();
+    
+    try {
+      await _recommendationService.logActivity(
+        track, 
+        likeStatus ? 'like' : 'unlike'
+      );
+      
+      updateRecommendationShelves();
+    } catch (e) {
+      print("Error toggling like: $e");
+      if (likeStatus) {
+        _likedTrackIds.remove(track.id);
+      } else {
+        _likedTrackIds.add(track.id);
+      }
+      notifyListeners();
+    }
+  }
+
   Future<void> addToRecentSearches(Track track) async {
     recentSearches.removeWhere((t) => t.id == track.id);
     recentSearches.insert(0, track);
@@ -918,6 +1146,11 @@ class AppState extends ChangeNotifier {
     }
     notifyListeners();
     await _persistRecentSearches();
+
+    // Log activity
+    if (isLoggedIn) {
+      await _recommendationService.logActivity(track, 'search');
+    }
   }
 
   Future<void> clearRecentSearches() async {
@@ -995,6 +1228,7 @@ class AppState extends ChangeNotifier {
     _positionSub?.cancel();
     _durationSub?.cancel();
     _playerStateSub?.cancel();
+    _processingStateSub?.cancel();
     _authStateSub?.cancel();
     audioPlayer.dispose();
     super.dispose();

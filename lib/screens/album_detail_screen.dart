@@ -19,6 +19,13 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
   List<Track> _recommendations = [];
   bool _isRecommendationsLoading = false;
   bool _didFetchRecommendations = false;
+  int _lastTrackCount = -1;
+
+  String _getGenreForTrack(Track track) {
+    final genres = ['Pop', 'Rock', 'Lofi', 'Hip Hop', 'Romantic', 'Party', 'Classical'];
+    final index = (track.title.hashCode + track.artist.hashCode).abs() % genres.length;
+    return genres[index];
+  }
 
   void _loadRecommendations(List<Track> playlistTracks) async {
     if (!mounted) return;
@@ -27,33 +34,154 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
     });
 
     final state = Provider.of<AppState>(context, listen: false);
-    String seedId = '5WXAlMNt'; // default seed: BTS Dynamite
-    
-    final onlineTrack = playlistTracks.firstWhere(
-      (t) => t.youtubeId != null && t.youtubeId!.isNotEmpty,
-      orElse: () => Track(id: -1, title: "", artist: "", duration: "", pattern: "", primaryColor: Colors.grey, secondaryColor: Colors.black),
-    );
+    List<Track> finalRecommendations = [];
 
-    if (onlineTrack.id != -1) {
-      seedId = onlineTrack.youtubeId!;
-    } else if (playlistTracks.isNotEmpty) {
+    // Check if album name or tracks match spiritual/devotional keywords
+    final albumLower = widget.albumName.toLowerCase();
+    
+    // 1. Jesus / Christian topic check
+    final jesusKeywords = ['jesus', 'christ', 'gospel', 'church', 'christian', 'worship', 'bible', 'prayer', 'hallelujah', 'lord', 'cross', 'amen'];
+    bool isJesusTopic = jesusKeywords.any((keyword) => albumLower.contains(keyword));
+    if (!isJesusTopic) {
+      isJesusTopic = playlistTracks.any((t) => jesusKeywords.any((keyword) => t.title.toLowerCase().contains(keyword)));
+    }
+
+    // 2. Hindu / General Devotional topic check
+    final devotionalKeywords = ['devotional', 'bhajan', 'krishna', 'rama', 'shiva', 'ganesha', 'durga', 'hanuman', 'stotra', 'aarti', 'mantra', 'spiritual', 'prarthana', 'god'];
+    bool isDevotionalTopic = devotionalKeywords.any((keyword) => albumLower.contains(keyword));
+    if (!isDevotionalTopic) {
+      isDevotionalTopic = playlistTracks.any((t) => devotionalKeywords.any((keyword) => t.title.toLowerCase().contains(keyword)));
+    }
+
+    if (isJesusTopic) {
       try {
-        final searchResults = await state.searchOnline(playlistTracks.first.title);
-        if (searchResults.isNotEmpty) {
-          seedId = searchResults.first.youtubeId!;
+        // Query online for similar topic songs
+        final searchResults = await state.searchOnline("popular christian worship jesus songs");
+        finalRecommendations.addAll(searchResults);
+      } catch (_) {}
+    } else if (isDevotionalTopic) {
+      try {
+        final searchResults = await state.searchOnline("popular bhajan devotional songs");
+        finalRecommendations.addAll(searchResults);
+      } catch (_) {}
+    }
+
+    // A. Content-based fallback: Query songs by the same artists and genres from this playlist online!
+    final Set<String> targetArtists = {};
+    final Set<String> targetGenres = {};
+
+    if (playlistTracks.isNotEmpty) {
+      for (var t in playlistTracks) {
+        if (t.artist.isNotEmpty && t.artist.toLowerCase() != 'unknown' && t.artist.toLowerCase() != 'unknown artist') {
+          targetArtists.add(t.artist);
+        }
+        targetGenres.add(_getGenreForTrack(t));
+      }
+    } else {
+      // If the playlist is empty, gather from the user's saved library tracks
+      final libraryTracks = state.songsList;
+      for (var t in libraryTracks) {
+        if (t.artist.isNotEmpty && t.artist.toLowerCase() != 'unknown' && t.artist.toLowerCase() != 'unknown artist') {
+          targetArtists.add(t.artist);
+        }
+        targetGenres.add(_getGenreForTrack(t));
+      }
+    }
+
+    final artistsList = targetArtists.toList()..shuffle();
+    final genresList = targetGenres.toList()..shuffle();
+
+    // Fetch songs by artist online
+    for (var artist in artistsList.take(2)) {
+      try {
+        final searchResults = await state.searchOnline(artist);
+        for (var track in searchResults) {
+          if (finalRecommendations.indexWhere((t) => t.title.toLowerCase() == track.title.toLowerCase()) == -1) {
+            finalRecommendations.add(track);
+          }
         }
       } catch (_) {}
     }
 
-    final recommendations = await state.getRecommendationsForSong(seedId);
-    
+    // Fetch songs by genre online
+    for (var genre in genresList.take(2)) {
+      try {
+        final searchResults = await state.searchOnline("$genre hits");
+        for (var track in searchResults) {
+          if (finalRecommendations.indexWhere((t) => t.title.toLowerCase() == track.title.toLowerCase()) == -1) {
+            finalRecommendations.add(track);
+          }
+        }
+      } catch (_) {}
+    }
+
+    // B. Also load standard collaborative recommendations for a seed track to blend them
+    if (playlistTracks.isNotEmpty) {
+      final seedTracks = List<Track>.from(playlistTracks)..shuffle();
+      final querySeeds = seedTracks.take(2).toList();
+
+      for (var seedTrack in querySeeds) {
+        String seedId = '';
+        if (seedTrack.youtubeId != null && seedTrack.youtubeId!.isNotEmpty) {
+          seedId = seedTrack.youtubeId!;
+        } else {
+          try {
+            final searchResults = await state.searchOnline(seedTrack.title);
+            if (searchResults.isNotEmpty) {
+              seedId = searchResults.first.youtubeId!;
+            }
+          } catch (_) {}
+        }
+
+        if (seedId.isNotEmpty) {
+          try {
+            final seedRecommendations = await state.getRecommendationsForSong(seedId);
+            for (var track in seedRecommendations) {
+              if (finalRecommendations.indexWhere((t) => t.title.toLowerCase() == track.title.toLowerCase()) == -1) {
+                finalRecommendations.add(track);
+              }
+            }
+          } catch (_) {}
+        }
+      }
+    }
+
+    // If still empty, fall back to general trending tracks
+    if (finalRecommendations.isEmpty && state.trendingTracks.isNotEmpty) {
+      finalRecommendations.addAll(state.trendingTracks);
+    }
+
+    // Filter out tracks that are already in this album
+    final albumTrackTitles = playlistTracks.map((t) => t.title.toLowerCase()).toSet();
+    finalRecommendations = finalRecommendations.where((t) => !albumTrackTitles.contains(t.title.toLowerCase())).toList();
+
+    // Shuffle the final list a bit so it is fresh and distinct every time they load the page
+    finalRecommendations.shuffle();
+
     if (mounted) {
       setState(() {
-        _recommendations = recommendations;
+        _recommendations = finalRecommendations.take(15).toList();
         _isRecommendationsLoading = false;
         _didFetchRecommendations = true;
       });
     }
+  }
+
+  String _getRecommendationSubtitle(List<Track> playlistTracks) {
+    final albumLower = widget.albumName.toLowerCase();
+    final jesusKeywords = ['jesus', 'christ', 'gospel', 'church', 'christian', 'worship', 'bible', 'prayer', 'hallelujah', 'lord', 'cross', 'amen'];
+    bool isJesus = jesusKeywords.any((keyword) => albumLower.contains(keyword)) ||
+        playlistTracks.any((t) => jesusKeywords.any((keyword) => t.title.toLowerCase().contains(keyword)));
+        
+    if (isJesus) return "Recommended songs matching the Jesus/Christian topic";
+    
+    final devotionalKeywords = ['devotional', 'bhajan', 'krishna', 'rama', 'shiva', 'ganesha', 'durga', 'hanuman', 'stotra', 'aarti', 'mantra', 'spiritual', 'prarthana', 'god'];
+    bool isDevotional = devotionalKeywords.any((keyword) => albumLower.contains(keyword)) ||
+        playlistTracks.any((t) => devotionalKeywords.any((keyword) => t.title.toLowerCase().contains(keyword)));
+        
+    if (isDevotional) return "Recommended songs matching the devotional/spiritual topic";
+    
+    return "Based on songs in this album";
   }
 
   @override
@@ -65,7 +193,9 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
         builder: (context, state, child) {
           final tracks = state.getTracksForAlbum(widget.albumName);
 
-          if (!_didFetchRecommendations && !_isRecommendationsLoading) {
+          if ((!_didFetchRecommendations || _lastTrackCount != tracks.length) && !_isRecommendationsLoading) {
+            _lastTrackCount = tracks.length;
+            _didFetchRecommendations = true;
             WidgetsBinding.instance.addPostFrameCallback((_) {
               _loadRecommendations(tracks);
             });
@@ -282,9 +412,9 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        const Text(
-                          "Based on songs in this playlist",
-                          style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                        Text(
+                          _getRecommendationSubtitle(tracks),
+                          style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
                         ),
                         const SizedBox(height: 16),
                         if (_isRecommendationsLoading)

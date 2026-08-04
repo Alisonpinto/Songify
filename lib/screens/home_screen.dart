@@ -5,7 +5,7 @@ import '../models/track.dart';
 import '../theme.dart';
 import '../widgets/procedural_album_art.dart';
 import '../widgets/add_to_album_sheet.dart';
-import 'dart:math' as math;
+import '../widgets/recommendation_grid.dart';
 import 'album_detail_screen.dart';
 import 'package:random_avatar/random_avatar.dart';
 
@@ -41,6 +41,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -99,120 +101,20 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          "Recommended for You",
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        if (state.isLoadingRecommendations)
-                          const SizedBox(
-                            height: 160,
-                            child: Center(
-                              child: CircularProgressIndicator(color: AppTheme.primaryYellow),
-                            ),
-                          )
-                        else if (state.recommendedTracks.isEmpty)
-                          const SizedBox(
-                            height: 160,
-                            child: Center(
-                              child: Text(
-                                "No recommendations available right now.",
-                                style: TextStyle(color: AppTheme.textSecondary),
+                        if (state.isLoggedIn) ...[
+                          if (state.isLoadingShelves)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 24.0),
+                              child: Center(
+                                child: CircularProgressIndicator(color: AppTheme.primaryYellow),
                               ),
-                            ),
-                          )
-                        else
-                          SizedBox(
-                            height: 160,
-                            child: ListView.builder(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: state.recommendedTracks.length,
-                              itemBuilder: (context, index) {
-                                final track = state.recommendedTracks[index];
-                                final isPlaying = state.currentTrack.id == track.id && state.isPlaying;
-                                
-                                return GestureDetector(
-                                  onTap: () {
-                                    state.addTrackAndPlay(track);
-                                  },
-                                  child: Container(
-                                    width: 130,
-                                    margin: const EdgeInsets.only(right: 16),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(16),
-                                      color: AppTheme.darkCard,
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        ClipRRect(
-                                          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                                          child: Stack(
-                                            children: [
-                                              Image.network(
-                                                track.thumbnailUrl ?? '',
-                                                width: 130,
-                                                height: 100,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (context, error, stackTrace) => Container(
-                                                  width: 130,
-                                                  height: 100,
-                                                  color: AppTheme.darkSurface,
-                                                  child: Icon(
-                                                    isPlaying ? Icons.volume_up_rounded : Icons.music_note_rounded,
-                                                    color: isPlaying ? AppTheme.primaryYellow : AppTheme.textSecondary,
-                                                    size: 32,
-                                                  ),
-                                                ),
-                                              ),
-                                              if (isPlaying)
-                                                Positioned.fill(
-                                                  child: Container(
-                                                    color: Colors.black.withOpacity(0.5),
-                                                    child: const Center(
-                                                      child: Icon(Icons.pause_rounded, color: AppTheme.primaryYellow, size: 28),
-                                                    ),
-                                                  ),
-                                                ),
-                                            ],
-                                          ),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                          child: Text(
-                                            track.title,
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 13,
-                                              color: isPlaying ? AppTheme.primaryYellow : AppTheme.textPrimary,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                          child: Text(
-                                            track.artist,
-                                            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        const SizedBox(height: 24),
+                            )
+                          else ...[
+                            const RecommendationGrid(),
+                          ],
+                        ] else ...[
+                          const RecommendationGrid(),
+                        ],
                         if (state.albumNames.isNotEmpty) ...[
                           const Text(
                             "Your Albums",
