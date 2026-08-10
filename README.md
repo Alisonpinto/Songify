@@ -2,6 +2,10 @@
 
 Welcome to **Songify**, an ad-free, personalized music streaming experience.
 
+> [!WARNING]  
+> **Disclaimer:** This project is strictly for **educational and portfolio purposes**. It is not intended for commercial use, monetization, or public distribution. All music content, audio streams, metadata, and artist information are served via unofficial endpoints and are the intellectual property of JioSaavn and their respective copyright holders.
+
+
 ## My Story
 
 I started developing this project out of a simple frustration: I absolutely hate the ads that interrupt my listening experience on Spotify. Furthermore, I didn't want to waste money on premium subscriptions when I knew I possessed the skills to build a music player for myself. 
