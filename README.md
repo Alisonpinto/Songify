@@ -1,6 +1,6 @@
 <div align="center">
 
-  <img src="assets/banner_readme.jpg" alt="Songify - Play What Moves You" width="100%" />
+  <a href="https://songify-website.vercel.app/"> <img src="assets/banner_readme.jpg" alt="Songify - Play What Moves You" width="100%" /></a>
 
   <br /><br />
 
