@@ -92,7 +92,6 @@ Run the application:
 flutter run
 ```
 
-That's it. Humanity survives another local development setup.
 
 ---
 
@@ -147,6 +146,14 @@ Please respect the terms of service and copyright laws applicable in your region
 This project is intended for **educational and portfolio purposes**.
 
 See the repository's [`LICENSE`](LICENSE) file for the applicable terms.
+
+---
+
+---
+
+Contact Dev. :- 
+Owner - alisonpinto955@gmail.com
+Co-creator - prafulmohite2006@gmail.com
 
 ---
 
