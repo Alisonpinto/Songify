@@ -6,14 +6,8 @@ Your contributions, whether code, design, documentation, ideas, or bug reports, 
 
 ## Contributors
 
-<a href="https://github.com/username1">
-  <img src="https://github.com/username1.png?size=100" width="80" alt="Username 1"/>
-</a>
-<a href="https://github.com/username2">
-  <img src="https://github.com/username2.png?size=100" width="80" alt="Username 2"/>
-</a>
-<a href="https://github.com/username3">
-  <img src="https://github.com/username3.png?size=100" width="80" alt="Username 3"/>
+<a href="https://github.com/Beeb4Life">
+  <img src="https://github.com/Beeb4Life.png?size=100" width="80" alt="Beeb4Life"/>
 </a>
 
 ---
