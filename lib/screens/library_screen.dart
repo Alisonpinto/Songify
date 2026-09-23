@@ -37,7 +37,7 @@ class LibraryScreen extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      "Your Library",
+                      "Library",
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.w800,
