@@ -322,6 +322,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> requestPermissionAndFetchSongs() async {
     await loadSavedTracks();
+    if (kIsWeb) return;
     
     try {
       bool permissionStatus = await _audioQuery.permissionsRequest();
@@ -513,7 +514,7 @@ class AppState extends ChangeNotifier {
   
   Future<List<Track>> searchOnline(String query) async {
     if (query.trim().isEmpty) return [];
-    
+
     try {
       final searchResult = await _jio.search.songs(query);
       if (searchResult != null && searchResult.results != null && searchResult.results!.isNotEmpty) {
@@ -566,6 +567,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<List<PlaylistRequest>> searchPlaylistsOnline(String query) async {
+    if (kIsWeb) return [];
     if (query.trim().isEmpty) return [];
     try {
       final response = await _jio.search.request(
@@ -635,6 +637,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> fetchRecommendations(String songId) async {
+    if (kIsWeb) return;
     isLoadingRecommendations = true;
     recommendedTracks = [];
     notifyListeners();
@@ -710,6 +713,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<List<Track>> getRecommendationsForSong(String songId) async {
+    if (kIsWeb) return [];
     try {
       final res = await _jio.search.dio.get(
         "/",
