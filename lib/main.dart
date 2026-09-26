@@ -12,17 +12,35 @@ import 'screens/profile_screen.dart';
 import 'widgets/mini_player.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:just_audio_background/just_audio_background.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Supabase (Please provide your URL and Anon Key)
-  await Supabase.initialize(
-    url: 'https://ubwwgncpgrkmqsjevteq.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVid3dnbmNwZ3JrbXFzamV2dGVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MzkyODIsImV4cCI6MjA5ODQxNTI4Mn0.2u9JM1Qai6SWNQOM9ziqbHDuIRkxpFpYSrx0iA2SwVQ',
-  );
+  // Load environment variables from .env file or --dart-define
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (_) {
+    // Fall back to environment definitions if .env is missing
+  }
+
+  final supabaseUrl = dotenv.env['SUPABASE_URL'] ??
+      const String.fromEnvironment('SUPABASE_URL');
+  final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'] ??
+      const String.fromEnvironment('SUPABASE_ANON_KEY');
+
+  if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
+    await Supabase.initialize(
+      url: supabaseUrl,
+      anonKey: supabaseAnonKey,
+    );
+  } else {
+    debugPrint(
+      'Warning: Supabase credentials missing. Provide SUPABASE_URL and SUPABASE_ANON_KEY via .env or --dart-define.',
+    );
+  }
 
   if (!kIsWeb) {
     try {
