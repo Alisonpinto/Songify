@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   supabase_flutter: ^2.5.4
+  flutter_dotenv: ^5.2.1
   http: ^1.6.0
   jiosaavn: ^0.1.1
   just_audio: ^0.10.6
@@ -30,6 +31,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/
+    - .env
 flutter_launcher_icons:
   android: true
   ios: true
