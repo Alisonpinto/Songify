@@ -12,6 +12,7 @@ import 'screens/profile_screen.dart';
 import 'widgets/mini_player.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:just_audio_background/just_audio_background.dart';
 
 Future<void> main() async {
@@ -23,13 +24,17 @@ Future<void> main() async {
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVid3dnbmNwZ3JrbXFzamV2dGVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MzkyODIsImV4cCI6MjA5ODQxNTI4Mn0.2u9JM1Qai6SWNQOM9ziqbHDuIRkxpFpYSrx0iA2SwVQ',
   );
 
-  await JustAudioBackground.init(
-    androidNotificationChannelId: 'com.example.songify.channel.audio',
-    androidNotificationChannelName: 'Audio playback',
-    androidNotificationOngoing: false,
-    androidStopForegroundOnPause: false, // Keep service alive when paused & app is in background
-    preloadArtwork: true,
-  );
+  if (!kIsWeb) {
+    try {
+      await JustAudioBackground.init(
+        androidNotificationChannelId: 'com.example.songify.channel.audio',
+        androidNotificationChannelName: 'Audio playback',
+        androidNotificationOngoing: false,
+        androidStopForegroundOnPause: false,
+        preloadArtwork: true,
+      );
+    } catch (_) {}
+  }
 
   runApp(
     ChangeNotifierProvider(

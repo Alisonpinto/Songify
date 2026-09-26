@@ -6,20 +6,62 @@ import '../models/track.dart';
 import '../theme.dart';
 import '../widgets/procedural_album_art.dart';
 import '../widgets/add_to_album_sheet.dart';
+import '../widgets/music_player_flip_card.dart';
 
 class NowPlayingScreen extends StatelessWidget {
   const NowPlayingScreen({super.key});
 
-  String _formatDuration(double progress, String totalDurationStr) {
-    // Basic mock formatter for display
-    int totalSeconds = 0;
-    List<String> parts = totalDurationStr.split(':');
+  int _getTotalSeconds(String durationStr) {
+    List<String> parts = durationStr.split(':');
     if (parts.length == 2) {
-      totalSeconds = int.parse(parts[0]) * 60 + int.parse(parts[1]);
+      return (int.tryParse(parts[0]) ?? 0) * 60 + (int.tryParse(parts[1]) ?? 0);
     } else if (parts.length == 3) {
-      totalSeconds = int.parse(parts[0]) * 3600 + int.parse(parts[1]) * 60 + int.parse(parts[2]);
+      return (int.tryParse(parts[0]) ?? 0) * 3600 +
+          (int.tryParse(parts[1]) ?? 0) * 60 +
+          (int.tryParse(parts[2]) ?? 0);
     }
-    
+    return 180;
+  }
+
+  List<LyricLine> _getLyricsForTrack(Track track) {
+    final totalSec = _getTotalSeconds(track.duration);
+    final quarter = totalSec / 4;
+    return [
+      LyricLine(
+        timestamp: Duration.zero,
+        text: 'Instrumental Introduction (${track.title})',
+        translation: 'Intro instrumental',
+      ),
+      LyricLine(
+        timestamp: Duration(seconds: (quarter * 0.4).toInt()),
+        text: 'Verse 1: Wandering melodies by ${track.artist}',
+        translation: 'Primer verso en resonancia armonica',
+      ),
+      LyricLine(
+        timestamp: Duration(seconds: (quarter * 1.0).toInt()),
+        text: 'Feel the rhythm pulses through the air',
+        translation: 'Siente el ritmo vibrar en el aire',
+      ),
+      LyricLine(
+        timestamp: Duration(seconds: (quarter * 1.8).toInt()),
+        text: 'Chorus: ${track.title} playing in high fidelity',
+        translation: 'Coro: Reproduciendo en alta fidelidad',
+      ),
+      LyricLine(
+        timestamp: Duration(seconds: (quarter * 2.6).toInt()),
+        text: 'Echoes fading into the vinyl groove tonight',
+        translation: 'Ecos desvaneciendose en los surcos del vinilo',
+      ),
+      LyricLine(
+        timestamp: Duration(seconds: (quarter * 3.4).toInt()),
+        text: 'Outro: Acoustic cadence & final resolution',
+        translation: 'Cierre acustico y conclusion',
+      ),
+    ];
+  }
+
+  String _formatDuration(double progress, String totalDurationStr) {
+    int totalSeconds = _getTotalSeconds(totalDurationStr);
     int elapsed = (progress * totalSeconds).toInt();
     int m = elapsed ~/ 60;
     int s = elapsed % 60;
@@ -78,37 +120,35 @@ class NowPlayingScreen extends StatelessWidget {
                 ),
               ),
 
-              // Album Art
+              // 3D Music Player Flip Card (Cover & Lyrics)
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      final size = math.min(constraints.maxWidth, constraints.maxHeight);
+                      final cardWidth = math.min(constraints.maxWidth, 360.0);
+                      final cardHeight = math.min(constraints.maxHeight, 420.0);
+                      final totalSec = _getTotalSeconds(track.duration);
+                      final currentSec = (state.trackProgress * totalSec).toInt();
+
                       return Center(
-                        child: SizedBox(
-                          width: size,
-                          height: size,
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            alignment: Alignment.center,
-                            children: [
-                              Positioned.fill(
-                                child: CircularAlbumCover(
-                                  track: track,
-                                  isPlaying: isPlaying,
-                                ),
-                              ),
-                              Positioned(
-                                right: -size * 0.05,
-                                top: -size * 0.15,
-                                child: VinylTonearm(
-                                  isPlaying: isPlaying,
-                                  discSize: size,
-                                ),
-                              ),
-                            ],
-                          ),
+                        child: MusicPlayerFlipCard(
+                          title: track.title,
+                          artist: track.artist,
+                          coverImageUrl: track.thumbnailUrl,
+                          isPlaying: isPlaying,
+                          accentColor: AppTheme.primaryYellow,
+                          secondaryColor: track.secondaryColor,
+                          width: cardWidth,
+                          height: cardHeight,
+                          currentPosition: Duration(seconds: currentSec),
+                          totalDuration: Duration(seconds: totalSec),
+                          lyrics: _getLyricsForTrack(track),
+                          onSeekLyric: (seekPos) {
+                            if (totalSec > 0) {
+                              state.seek((seekPos.inSeconds / totalSec).clamp(0.0, 1.0));
+                            }
+                          },
                         ),
                       );
                     },
