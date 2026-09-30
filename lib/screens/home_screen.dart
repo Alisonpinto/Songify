@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:songify_flutter/widgets/album_tile.dart';
+import 'package:songify_flutter/widgets/buttons/search_icon_button.dart';
+import 'package:songify_flutter/widgets/buttons/shuffle_button.dart';
+import 'package:songify_flutter/widgets/track_list_tile.dart';
 import '../providers/app_state.dart';
 import '../models/track.dart';
 import '../theme.dart';
@@ -28,19 +31,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  Widget _buildAlbumPlaceholder() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppTheme.darkCard, Color(0xFF2A3140)],
-        ),
-      ),
-      child: const Center(child: Icon(Icons.album_rounded, size: 40, color: AppTheme.primaryYellow)),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Consumer<AppState>(
@@ -63,10 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         _Recommendations(loggedIn: state.isLoggedIn, loadingShelves: state.isLoadingShelves),
                         if (state.albumNames.isNotEmpty) ...[
-                          const Text(
-                            "Your Albums",
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
-                          ),
+                          const _Title("Your Albums"),
                           const SizedBox(height: 12),
                           SizedBox(
                             height: 130,
@@ -95,108 +82,33 @@ class _HomeScreenState extends State<HomeScreen> {
                                   name: album,
                                   trackCount: tracksCount,
                                   coverUrl: firstTrackWithThumb.thumbnailUrl,
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (context) => AlbumDetailScreen(albumName: album)),
-                                    );
-                                  },
+                                  onPressed: () => _onAlbumPressed(album),
                                 );
                               },
                             ),
                           ),
                           const SizedBox(height: 24),
                           _isSearching
-                              ? Container(
+                              ? SizedBox(
                                   height: 46,
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.darkCard,
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(color: AppTheme.primaryYellow.withOpacity(0.5)),
-                                  ),
-                                  child: TextField(
+                                  child: _SearchField(
                                     controller: _searchController,
-                                    autofocus: true,
-                                    style: const TextStyle(color: AppTheme.textPrimary),
-                                    decoration: InputDecoration(
-                                      hintText: "Search from all songs...",
-                                      hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 14),
-                                      prefixIcon: const Icon(
-                                        Icons.search_rounded,
-                                        color: AppTheme.textSecondary,
-                                        size: 20,
-                                      ),
-                                      suffixIcon: IconButton(
-                                        icon: const Icon(Icons.close_rounded, color: AppTheme.textSecondary, size: 20),
-                                        onPressed: () {
-                                          setState(() {
-                                            _isSearching = false;
-                                            _searchController.clear();
-                                            _localSearchQuery = "";
-                                          });
-                                        },
-                                      ),
-                                      border: InputBorder.none,
-                                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                                    ),
-                                    onChanged: (val) {
-                                      setState(() {
-                                        _localSearchQuery = val;
-                                      });
-                                    },
+                                    onClose: _onCloseSearch,
+                                    onChanged: _onSearch,
                                   ),
                                 )
                               : Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    const Text(
-                                      "All Songs",
-                                      style: TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppTheme.textPrimary,
-                                      ),
-                                    ),
+                                    const _Title("All Songs"),
                                     Row(
                                       children: [
-                                        IconButton(
-                                          constraints: const BoxConstraints(),
-                                          padding: const EdgeInsets.all(8),
-                                          icon: const Icon(
-                                            Icons.search_rounded,
-                                            size: 20,
-                                            color: AppTheme.primaryYellow,
-                                          ),
-                                          tooltip: "Search songs",
-                                          onPressed: () {
-                                            setState(() {
-                                              _isSearching = true;
-                                            });
-                                          },
-                                        ),
+                                        SearchIconButton(onPressed: _onOpenSearch),
                                         const SizedBox(width: 4),
-                                        TextButton.icon(
+                                        ShuffleButton(
                                           onPressed: filteredTracks.isNotEmpty
-                                              ? () => state.shuffleQueue(filteredTracks)
+                                              ? () => _onShuffle(state, filteredTracks)
                                               : null,
-                                          icon: const Icon(
-                                            Icons.shuffle_rounded,
-                                            size: 16,
-                                            color: AppTheme.primaryYellow,
-                                          ),
-                                          label: const Text(
-                                            "Shuffle",
-                                            style: TextStyle(
-                                              color: AppTheme.primaryYellow,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                          style: TextButton.styleFrom(
-                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                            backgroundColor: AppTheme.darkCard,
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                          ),
                                         ),
                                       ],
                                     ),
@@ -223,36 +135,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                   final track = filteredTracks[index];
                                   final isPlaying = state.currentTrack.id == track.id && state.isPlaying;
 
-                                  return ListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    leading: TrackThumbnail(track: track, isPlaying: isPlaying, size: 48),
-                                    title: Text(
-                                      track.title,
-                                      style: TextStyle(
-                                        color: isPlaying ? AppTheme.primaryYellow : AppTheme.textPrimary,
-                                        fontWeight: isPlaying ? FontWeight.bold : FontWeight.w600,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    subtitle: Text(
-                                      track.artist,
-                                      style: const TextStyle(color: AppTheme.textSecondary),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    trailing: IconButton(
-                                      icon: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.textSecondary),
-                                      onPressed: () {
-                                        showAddToAlbumSheet(context, track, state);
-                                      },
-                                    ),
-                                    onTap: () {
-                                      state.playFromQueue(filteredTracks, track);
-                                    },
-                                    onLongPress: () {
-                                      showAddToAlbumSheet(context, track, state);
-                                    },
+                                  return TrackListTile(
+                                    track: track,
+                                    playing: isPlaying,
+                                    onPressed: () => _onPlayTrack(state, filteredTracks, track),
+                                    onAddToPlaylist: () => _onAddTrackToAlbum(state, track),
+                                    onLongPressed: () => _onAddTrackToAlbum(state, track),
                                   );
                                 },
                               ),
@@ -265,6 +153,87 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       },
+    );
+  }
+
+  void _onAlbumPressed(String album) {
+    Navigator.push(context, MaterialPageRoute(builder: (context) => AlbumDetailScreen(albumName: album)));
+  }
+
+  void _onPlayTrack(AppState state, List<Track> tracks, Track track) {
+    state.playFromQueue(tracks, track);
+  }
+
+  void _onAddTrackToAlbum(AppState state, Track track) {
+    showAddToAlbumSheet(context, track, state);
+  }
+
+  void _onCloseSearch() {
+    setState(() {
+      _isSearching = false;
+      _searchController.clear();
+      _localSearchQuery = "";
+    });
+  }
+
+  void _onSearch(String text) {
+    setState(() => _localSearchQuery = text);
+  }
+
+  void _onOpenSearch() => setState(() => _isSearching = true);
+
+  void _onShuffle(AppState state, List<Track> tracks) {
+    state.shuffleQueue(tracks);
+  }
+}
+
+class _Title extends StatelessWidget {
+  final String title;
+
+  const _Title(this.title, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+    );
+  }
+}
+
+// TODO(Yuki): unify this widget with the existing SearchTextField
+class _SearchField extends StatelessWidget {
+  final TextEditingController? controller;
+  final void Function()? onClose;
+  final void Function(String text)? onChanged;
+
+  const _SearchField({super.key, this.controller, this.onClose, this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppTheme.darkCard,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.primaryYellow.withValues(alpha: 0.5)),
+      ),
+      child: TextField(
+        controller: controller,
+        autofocus: true,
+        style: const TextStyle(color: AppTheme.textPrimary),
+        decoration: InputDecoration(
+          hintText: "Search from all songs...",
+          hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 14),
+          prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.textSecondary, size: 20),
+          suffixIcon: IconButton(
+            icon: const Icon(Icons.close_rounded, color: AppTheme.textSecondary, size: 20),
+            onPressed: onClose,
+          ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 8),
+        ),
+        onChanged: onChanged,
+      ),
     );
   }
 }
