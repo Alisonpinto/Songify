@@ -1,11 +1,9 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'theme.dart';
 import 'providers/app_state.dart';
 import 'screens/splash_screen.dart';
 import 'screens/home_screen.dart';
-import 'screens/album_detail_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/discover_screen.dart';
 import 'screens/profile_screen.dart';
@@ -110,29 +108,14 @@ class _MainShellState extends State<MainShell> {
 
         return Scaffold(
           backgroundColor: AppTheme.darkBackground,
-          body: AnimatedContainer(
-            duration: const Duration(milliseconds: 800),
-            curve: Curves.easeInOut,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  glowColor.withValues(alpha: 0.22),
-                  AppTheme.darkBackground,
-                ],
-                stops: const [0.0, 0.7],
-              ),
-            ),
-            child: IndexedStack(
-              index: state.currentTab,
-              children: const [
-                HomeScreen(),
-                DiscoverScreen(),
-                LibraryScreen(),
-                ProfileScreen(),
-              ],
-            ),
+          body: IndexedStack(
+            index: state.currentTab,
+            children: const [
+              HomeScreen(),
+              DiscoverScreen(),
+              LibraryScreen(),
+              ProfileScreen(),
+            ],
           ),
           bottomNavigationBar: Column(
             mainAxisSize: MainAxisSize.min,

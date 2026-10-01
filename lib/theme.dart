@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  static const Color darkBackground = Color(0xFF080B10);
+  static const Color darkBackground = Color(0xFF000000);
   static const Color darkSurface = Color(0xFF13171F);
   static const Color darkCard = Color(0xFF1E2430);
   
@@ -21,7 +21,6 @@ class AppTheme {
         primary: primaryYellow,
         secondary: secondaryYellow,
         surface: darkSurface,
-        background: darkBackground,
       ),
       useMaterial3: true,
       fontFamily: 'Roboto', // Ideally we'd add Inter or similar

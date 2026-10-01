@@ -246,7 +246,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                 showAddToAlbumSheet(context, track, state);
               },
             );
-          }).toList(),
+          }),
         ],
         if (_playlistResults.isNotEmpty) ...[
           const Padding(
@@ -307,7 +307,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                 );
               },
             );
-          }).toList(),
+          }),
         ],
         const SizedBox(height: 32),
       ],

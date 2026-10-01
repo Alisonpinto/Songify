@@ -13,7 +13,7 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppTheme.darkBackground,
       body: Consumer<AppState>(
         builder: (context, state, child) {
           final glowColor = MiniPlayer.getTrackColor(state.currentTrack);
@@ -29,21 +29,8 @@ class ProfileScreen extends StatelessWidget {
                   background: Stack(
                     fit: StackFit.expand,
                     children: [
-                      // Cool blurred gradient background based on profile
-                      Container(
-                        decoration: BoxDecoration(
-                          gradient: RadialGradient(
-                            center: const Alignment(0.0, -0.8),
-                            radius: 1.2,
-                            colors: [
-                              glowColor.withValues(alpha: 0.25),
-                              glowColor.withValues(alpha: 0.05),
-                              AppTheme.darkBackground,
-                            ],
-                            stops: const [0.0, 0.4, 1.0],
-                          ),
-                        ),
-                      ),
+                      // Removed dynamic background
+                      Container(color: AppTheme.darkBackground),
                       // Bottom fade to remove any hard lines between header and body
                       Container(
                         decoration: BoxDecoration(
