@@ -22,7 +22,8 @@ class TrackListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      contentPadding: EdgeInsets.zero,
+      contentPadding: EdgeInsets.symmetric(horizontal: 4),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadiusGeometry.all(Radius.circular(12))),
       leading: TrackThumbnail(track: track, isPlaying: playing, size: 48),
       title: Text(
         track.title,

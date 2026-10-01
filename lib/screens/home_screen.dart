@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:random_avatar/random_avatar.dart';
 import 'package:songify_flutter/widgets/album_tile.dart';
 import 'package:songify_flutter/widgets/buttons/search_icon_button.dart';
 import 'package:songify_flutter/widgets/buttons/shuffle_button.dart';
 import 'package:songify_flutter/widgets/track_list_tile.dart';
-import '../providers/app_state.dart';
+
 import '../models/track.dart';
+import '../providers/app_state.dart';
 import '../theme.dart';
-import '../widgets/procedural_album_art.dart';
 import '../widgets/add_to_album_sheet.dart';
 import '../widgets/recommendation_grid.dart';
 import 'album_detail_screen.dart';
-import 'package:random_avatar/random_avatar.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -37,118 +37,121 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, state, child) {
         final filteredTracks = _localSearchQuery.isEmpty ? state.songsList : state.searchLocalSongs(_localSearchQuery);
 
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 12),
-                const _Avatar(),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _Recommendations(loggedIn: state.isLoggedIn, loadingShelves: state.isLoadingShelves),
-                        if (state.albumNames.isNotEmpty) ...[
-                          const _Title("Your Albums"),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            height: 130,
-                            child: ListView.separated(
-                              separatorBuilder: (context, index) => const SizedBox(width: 16),
-                              scrollDirection: Axis.horizontal,
-                              itemCount: state.albumNames.length,
-                              itemBuilder: (context, index) {
-                                final album = state.albumNames[index];
-                                final tracksCount = state.getTracksForAlbum(album).length;
-                                final albumTracks = state.getTracksForAlbum(album);
-                                final firstTrackWithThumb = albumTracks.firstWhere(
-                                  (t) => t.thumbnailUrl != null && t.thumbnailUrl!.isNotEmpty,
-                                  orElse: () => Track(
-                                    id: -1,
-                                    title: "",
-                                    artist: "",
-                                    duration: "",
-                                    pattern: "",
-                                    primaryColor: Colors.grey,
-                                    secondaryColor: Colors.black,
-                                  ),
-                                );
-
-                                return AlbumTile(
-                                  name: album,
-                                  trackCount: tracksCount,
-                                  coverUrl: firstTrackWithThumb.thumbnailUrl,
-                                  onPressed: () => _onAlbumPressed(album),
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          _isSearching
-                              ? SizedBox(
-                                  height: 46,
-                                  child: _SearchField(
-                                    controller: _searchController,
-                                    onClose: _onCloseSearch,
-                                    onChanged: _onSearch,
-                                  ),
-                                )
-                              : Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    const _Title("All Songs"),
-                                    Row(
-                                      children: [
-                                        SearchIconButton(onPressed: _onOpenSearch),
-                                        const SizedBox(width: 4),
-                                        ShuffleButton(
-                                          onPressed: filteredTracks.isNotEmpty
-                                              ? () => _onShuffle(state, filteredTracks)
-                                              : null,
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                          const SizedBox(height: 12),
-                        ],
-                        filteredTracks.isEmpty
-                            ? const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 40.0),
-                                child: Center(
-                                  child: Text(
-                                    "No matching songs found.",
-                                    style: TextStyle(color: AppTheme.textSecondary),
-                                  ),
-                                ),
-                              )
-                            : ListView.separated(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                itemCount: filteredTracks.length,
-                                separatorBuilder: (context, index) => const SizedBox(height: 8),
+        return Material(
+          type: MaterialType.transparency,
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 12),
+                  const _Avatar(),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _Recommendations(loggedIn: state.isLoggedIn, loadingShelves: state.isLoadingShelves),
+                          if (state.albumNames.isNotEmpty) ...[
+                            const _Title("Your Albums"),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              height: 130,
+                              child: ListView.separated(
+                                separatorBuilder: (context, index) => const SizedBox(width: 16),
+                                scrollDirection: Axis.horizontal,
+                                itemCount: state.albumNames.length,
                                 itemBuilder: (context, index) {
-                                  final track = filteredTracks[index];
-                                  final isPlaying = state.currentTrack.id == track.id && state.isPlaying;
+                                  final album = state.albumNames[index];
+                                  final tracksCount = state.getTracksForAlbum(album).length;
+                                  final albumTracks = state.getTracksForAlbum(album);
+                                  final firstTrackWithThumb = albumTracks.firstWhere(
+                                    (t) => t.thumbnailUrl != null && t.thumbnailUrl!.isNotEmpty,
+                                    orElse: () => Track(
+                                      id: -1,
+                                      title: "",
+                                      artist: "",
+                                      duration: "",
+                                      pattern: "",
+                                      primaryColor: Colors.grey,
+                                      secondaryColor: Colors.black,
+                                    ),
+                                  );
 
-                                  return TrackListTile(
-                                    track: track,
-                                    playing: isPlaying,
-                                    onPressed: () => _onPlayTrack(state, filteredTracks, track),
-                                    onAddToPlaylist: () => _onAddTrackToAlbum(state, track),
-                                    onLongPressed: () => _onAddTrackToAlbum(state, track),
+                                  return AlbumTile(
+                                    name: album,
+                                    trackCount: tracksCount,
+                                    coverUrl: firstTrackWithThumb.thumbnailUrl,
+                                    onPressed: () => _onAlbumPressed(album),
                                   );
                                 },
                               ),
-                      ],
+                            ),
+                            const SizedBox(height: 24),
+                            _isSearching
+                                ? SizedBox(
+                                    height: 46,
+                                    child: _SearchField(
+                                      controller: _searchController,
+                                      onClose: _onCloseSearch,
+                                      onChanged: _onSearch,
+                                    ),
+                                  )
+                                : Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const _Title("All Songs"),
+                                      Row(
+                                        children: [
+                                          SearchIconButton(onPressed: _onOpenSearch),
+                                          const SizedBox(width: 4),
+                                          ShuffleButton(
+                                            onPressed: filteredTracks.isNotEmpty
+                                                ? () => _onShuffle(state, filteredTracks)
+                                                : null,
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                            const SizedBox(height: 12),
+                          ],
+                          filteredTracks.isEmpty
+                              ? const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 40.0),
+                                  child: Center(
+                                    child: Text(
+                                      "No matching songs found.",
+                                      style: TextStyle(color: AppTheme.textSecondary),
+                                    ),
+                                  ),
+                                )
+                              : ListView.separated(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemCount: filteredTracks.length,
+                                  separatorBuilder: (context, index) => const SizedBox(height: 8),
+                                  itemBuilder: (context, index) {
+                                    final track = filteredTracks[index];
+                                    final isPlaying = state.currentTrack.id == track.id && state.isPlaying;
+
+                                    return TrackListTile(
+                                      track: track,
+                                      playing: isPlaying,
+                                      onPressed: () => _onPlayTrack(state, filteredTracks, track),
+                                      onAddToPlaylist: () => _onAddTrackToAlbum(state, track),
+                                      onLongPressed: () => _onAddTrackToAlbum(state, track),
+                                    );
+                                  },
+                                ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
