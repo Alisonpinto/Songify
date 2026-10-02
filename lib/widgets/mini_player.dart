@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../models/track.dart';
-import '../theme.dart';
 import '../widgets/procedural_album_art.dart';
 import '../screens/now_playing_screen.dart';
 
