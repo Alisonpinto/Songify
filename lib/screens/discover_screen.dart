@@ -268,7 +268,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                 );
               },
             );
-          }).toList(),
+          }),
         ],
         const SizedBox(height: 32),
       ],

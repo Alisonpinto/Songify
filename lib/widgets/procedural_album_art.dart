@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../models/track.dart';
 import '../theme.dart';
-import 'dart:typed_data';
 
 class TrackThumbnail extends StatelessWidget {
   final Track track;

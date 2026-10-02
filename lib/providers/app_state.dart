@@ -76,7 +76,7 @@ class AppState extends ChangeNotifier {
   Duration? _currentDuration;
   final _supabase = Supabase.instance.client;
   List<String> _albumNamesCache = [];
-  Map<String, List<int>> _albumTracksCache = {};
+  final Map<String, List<int>> _albumTracksCache = {};
   
   StreamSubscription<AuthState>? _authStateSub;
   bool get isLoggedIn => _supabase.auth.currentUser != null;
@@ -354,7 +354,7 @@ class AppState extends ChangeNotifier {
       final patterns = ['waves', 'vinyl', 'spheres', 'grid'];
       final colors = [Colors.red, Colors.blue, Colors.green, Colors.purple, Colors.orange];
       final random = math.Random();
-      final localTracks = songs.where((s) => s.isMusic == true && s.data != null).map((song) {
+      final localTracks = songs.where((s) => s.isMusic == true).map((song) {
         return Track(
           id: song.id,
           title: song.title,
@@ -517,8 +517,8 @@ class AppState extends ChangeNotifier {
 
     try {
       final searchResult = await _jio.search.songs(query);
-      if (searchResult != null && searchResult.results != null && searchResult.results!.isNotEmpty) {
-        final songIds = searchResult.results!.map((s) => s.id!).toList();
+      if (searchResult.results.isNotEmpty) {
+        final songIds = searchResult.results.map((s) => s.id).toList();
         final List<SongResponse> detailedSongs = await _jio.songs.detailsById(songIds);
         
         final List<Track> tracks = [];
@@ -589,7 +589,7 @@ class AppState extends ChangeNotifier {
         queryParameters: {'listid': playlistId},
       );
       final playlist = Playlist.fromJson(response);
-      final songIds = playlist.songs.map((s) => s.id!).toList();
+      final songIds = playlist.songs.map((s) => s.id).toList();
       if (songIds.isEmpty) return [];
       
       final List<SongResponse> detailedSongs = await _jio.songs.detailsById(songIds);

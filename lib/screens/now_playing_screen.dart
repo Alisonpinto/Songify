@@ -77,20 +77,8 @@ class NowPlayingScreen extends StatelessWidget {
 
         return Scaffold(
           backgroundColor: AppTheme.darkBackground,
-          body: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  track.primaryColor.withOpacity(0.22),
-                  AppTheme.darkBackground,
-                ],
-                stops: const [0.0, 0.7],
-              ),
-            ),
-            child: SafeArea(
-              child: Column(
+          body: SafeArea(
+            child: Column(
               children: [
                 // Header
                 Padding(
@@ -311,8 +299,7 @@ class NowPlayingScreen extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
+      );
       },
     );
   }

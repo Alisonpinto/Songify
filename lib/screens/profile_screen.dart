@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:songify_flutter/dialogs/edit_profile_dialog.dart';
 import 'package:songify_flutter/dialogs/logout_dialog.dart';
-import 'package:songify_flutter/widgets/button/login_signup_button.dart';
-import 'package:songify_flutter/widgets/button/logout_icon_button.dart';
+import 'package:songify_flutter/widgets/buttons/login_signup_button.dart';
+import 'package:songify_flutter/widgets/buttons/logout_icon_button.dart';
 import 'package:songify_flutter/widgets/music_stat_tile.dart';
 import 'package:songify_flutter/widgets/premium_features_info.dart';
 import 'package:songify_flutter/widgets/profile_card.dart';
@@ -21,7 +21,7 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppTheme.darkBackground,
       body: Consumer<AppState>(
         builder: (context, state, child) {
           final glowColor = MiniPlayer.getTrackColor(state.currentTrack);
@@ -32,12 +32,15 @@ class ProfileScreen extends StatelessWidget {
                 expandedHeight: 320,
                 title: Text("Nice to see you"),
                 pinned: true,
-                backgroundColor: AppTheme.darkBackground,
+                backgroundColor: glowColor.withValues(alpha: 0.2),
                 elevation: 0,
                 flexibleSpace: FlexibleSpaceBar(
                   background: Stack(
                     fit: StackFit.expand,
                     children: [
+                      // Removed dynamic background
+                      // Positioned.fill(child: ColoredBox(color: AppTheme.darkBackground)),
+
                       // Cool blurred gradient background based on profile
                       DecoratedBox(
                         decoration: BoxDecoration(
@@ -45,14 +48,15 @@ class ProfileScreen extends StatelessWidget {
                             center: const Alignment(0.0, -0.8),
                             radius: 1.2,
                             colors: [
-                              glowColor.withValues(alpha: 0.25),
-                              glowColor.withValues(alpha: 0.05),
                               AppTheme.darkBackground,
+                              AppTheme.darkBackground,
+                              glowColor.withValues(alpha: 0.05),
                             ],
                             stops: const [0.0, 0.4, 1.0],
                           ),
                         ),
                       ),
+
                       // Bottom fade to remove any hard lines between header and body
                       DecoratedBox(
                         decoration: BoxDecoration(
