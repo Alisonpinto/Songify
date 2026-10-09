@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:jiosaavn/jiosaavn.dart';
 import '../models/track.dart';
 import '../utils/search_engine.dart';
+import '../utils/validators.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:convert';

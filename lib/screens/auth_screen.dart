@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../theme.dart';
+import '../utils/validators.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
