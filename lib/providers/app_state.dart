@@ -216,7 +216,7 @@ class AppState extends ChangeNotifier {
         userId = currentUser.id;
         userName = "Music Lover"; // Default if not found
         userHandle = "@musiclover";
-        
+
         try {
           final userResponse = await _supabase.from('users').select().eq('id', currentUser.id).limit(1);
           if (userResponse.isNotEmpty) {
@@ -224,6 +224,13 @@ class AppState extends ChangeNotifier {
             userName = userData['name'] ?? userName;
             userHandle = userData['handle'] ?? userHandle;
             userProfileImage = userData['profile_image_url'];
+          } else {
+            // Issue #3 — Recovery: the user authenticated successfully but no
+            // profile row exists (e.g. the signup upsert failed mid-flight).
+            // Idempotently create the profile now using data available from the
+            // auth session.  This is safe to run repeatedly because it is keyed
+            // on the auth UID and uses upsert (INSERT … ON CONFLICT DO UPDATE).
+            await _recoverMissingProfile(currentUser);
           }
         } catch (e) {
           print("Error fetching user data: $e");
@@ -293,7 +300,7 @@ class AppState extends ChangeNotifier {
       } catch (e) {
         print("Error fetching user library: $e");
       }
-      
+
     } catch (e) {
       print("Error loading from Supabase: $e");
     } finally {
@@ -301,19 +308,74 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Issue #3 — Recovery: idempotently creates a profile row for an
+  /// authenticated user who has no corresponding row in the `users` table.
+  ///
+  /// This covers the case where `signUp()` succeeded in Supabase Auth but the
+  /// subsequent `users` upsert failed (network error, RLS policy timing, etc.).
+  ///
+  /// Derives a best-effort display name and handle from the auth email.  Uses
+  /// `upsert` with `ignoreDuplicates: true` so the call is entirely safe to
+  /// retry — it will not overwrite an existing row that has been customised.
+  Future<void> _recoverMissingProfile(User currentUser) async {
+    try {
+      final email = currentUser.email ?? '';
+      // Derive a simple default name from the part before the @ symbol.
+      final localPart = email.contains('@') ? email.split('@').first : 'user';
+      final defaultName = localPart.isNotEmpty ? localPart : 'Music Lover';
+      // Ensure the handle is valid: strip non-alphanumeric/underscore chars.
+      final handleBase = localPart.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '');
+      final defaultHandle = '@${handleBase.isNotEmpty ? handleBase : 'user'}';
+
+      await _supabase.from('users').upsert(
+        {
+          'id': currentUser.id,
+          'name': defaultName,
+          'handle': defaultHandle,
+          'email': email,
+        },
+        ignoreDuplicates: true,
+      );
+
+      // Update local state so the UI reflects the recovered profile immediately.
+      userName = defaultName;
+      userHandle = defaultHandle;
+      print("Recovered missing profile for user ${currentUser.id}");
+    } catch (e) {
+      // Recovery is best-effort; do not propagate — the user can still use the
+      // app and will be prompted to fill in their profile.
+      print("Error recovering missing profile: $e");
+    }
+  }
+
   Future<void> updateProfile(String newName, String newHandle) async {
     final currentUser = _supabase.auth.currentUser;
     if (currentUser == null) return;
-    
+
+    // Validate before touching the network.
+    final nameError = validateName(newName);
+    if (nameError != null) throw Exception(nameError);
+    final handleError = validateHandle(newHandle);
+    if (handleError != null) throw Exception(handleError);
+
+    final canonicalHandle = normaliseHandle(newHandle);
+
     try {
       await _supabase.from('users').upsert({
         'id': currentUser.id,
         'name': newName,
-        'handle': newHandle,
+        'handle': canonicalHandle,
       });
       userName = newName;
-      userHandle = newHandle;
+      userHandle = canonicalHandle;
       notifyListeners();
+    } on PostgrestException catch (e) {
+      print("Error updating profile: $e");
+      // Postgres unique_violation code.
+      if (e.code == '23505') {
+        throw Exception('That handle is already taken. Please choose another.');
+      }
+      rethrow;
     } catch (e) {
       print("Error updating profile: $e");
       rethrow;
