@@ -31,6 +31,12 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   SearchType _searchType = SearchType.all;
 
   bool _isLoading = false;
+
+  // Monotonically-increasing token used to discard stale search responses.
+  // Each call to _performSearch captures the current value; after every await,
+  // it checks whether the token has advanced before touching state.
+  int _searchToken = 0;
+
   late final Debouncer<String> _searchDebouncer = Debouncer(const Duration(milliseconds: 500), (prev, next) {
     if (mounted && prev?.trim() != next.trim()) {
       _performSearch(next);
@@ -44,17 +50,27 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   }
 
   void _performSearch(String query) async {
+    // Advance the token so any in-flight request from a previous call can detect
+    // it is stale and discard its result without mutating state.
+    final token = ++_searchToken;
+
     if (query.trim().isEmpty) {
-      setState(() {
-        _searchResults = [];
-        _playlistResults = [];
-      });
+      // Immediately clear results; no async work needed.
+      if (mounted) {
+        setState(() {
+          _searchResults = [];
+          _playlistResults = [];
+          _isLoading = false;
+        });
+      }
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
 
     final state = Provider.of<AppState>(context, listen: false);
 
@@ -62,7 +78,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       switch (_searchType) {
         case SearchType.all:
           final results = await Future.wait([state.searchOnline(query), state.searchPlaylistsOnline(query)]);
-          if (mounted) {
+          // Only apply if this is still the latest request and the widget is alive.
+          if (mounted && token == _searchToken) {
             setState(() {
               _searchResults = results[0] as List<Track>;
               _playlistResults = results[1] as List<PlaylistRequest>;
@@ -71,7 +88,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           }
         case SearchType.songs:
           final results = await state.searchOnline(query);
-          if (mounted) {
+          if (mounted && token == _searchToken) {
             setState(() {
               _searchResults = results;
               _playlistResults = [];
@@ -80,7 +97,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           }
         case SearchType.playlists:
           final results = await state.searchPlaylistsOnline(query);
-          if (mounted) {
+          if (mounted && token == _searchToken) {
             setState(() {
               _playlistResults = results;
               _searchResults = [];
@@ -89,7 +106,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           }
       }
     } catch (_) {
-      if (mounted) {
+      // Only clear the loading indicator if this is still the active request.
+      if (mounted && token == _searchToken) {
         setState(() {
           _isLoading = false;
         });
