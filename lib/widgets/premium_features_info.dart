@@ -51,7 +51,7 @@ class PremiumFeaturesInfo extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(color: AppTheme.textSecondary, height: 1.5, fontSize: 15),
             ),
-            ?t,
+            if (t != null) t,
           ],
         ),
       ),
