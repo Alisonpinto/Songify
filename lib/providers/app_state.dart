@@ -42,7 +42,8 @@ class AppState extends ChangeNotifier {
   final JioSaavnClient _jio = JioSaavnClient();
   
   List<Track> recommendedTracks = [];
-  bool isLoadingRecommendations = false;
+bool isLoadingRecommendations = false;
+int _recommendationRequestId = 0;
   
   // Recommendation Service & Shelf Lists
   final RecommendationService _recommendationService = RecommendationService();
@@ -105,82 +106,92 @@ class AppState extends ChangeNotifier {
     });
   }
 
-  void _initAudioStreams() {
-    DateTime lastSavedTime = DateTime.now();
-    _positionSub = audioPlayer.positionStream.listen((position) {
-      if (_currentDuration != null && _currentDuration!.inMilliseconds > 0) {
-        trackProgress = position.inMilliseconds / _currentDuration!.inMilliseconds;
-        _lastTrackProgress = trackProgress;
-        notifyListeners();
-      }
-      final now = DateTime.now();
-      if (now.difference(lastSavedTime).inSeconds >= 3) {
-        lastSavedTime = now;
-        _persistPosition(position.inMilliseconds);
-        
-        // Log playing activity periodically to save position for Continue Listening
-        if (isLoggedIn && currentQueue.isNotEmpty && playingTrackIndex < currentQueue.length) {
-          final current = currentQueue[playingTrackIndex];
-          _recommendationService.logActivity(current, 'play', positionMs: position.inMilliseconds);
-        }
-      }
-    });
-    
-    _durationSub = audioPlayer.durationStream.listen((duration) {
-      _currentDuration = duration;
-    });
-    
-    _playerStateSub = audioPlayer.playerStateStream.listen((state) {
-      isPlaying = state.playing;
+void _initAudioStreams() {
+  DateTime lastSavedTime = DateTime.now();
+
+  _positionSub = audioPlayer.positionStream.listen((position) {
+    if (_currentDuration != null &&
+        _currentDuration!.inMilliseconds > 0) {
+      trackProgress =
+          position.inMilliseconds / _currentDuration!.inMilliseconds;
+      _lastTrackProgress = trackProgress;
       notifyListeners();
-      if (!state.playing) {
-        _persistPosition(audioPlayer.position.inMilliseconds);
+    }
+
+    final now = DateTime.now();
+    if (now.difference(lastSavedTime).inSeconds >= 3) {
+      lastSavedTime = now;
+      _persistPosition(position.inMilliseconds);
+
+      if (isLoggedIn &&
+          currentQueue.isNotEmpty &&
+          playingTrackIndex < currentQueue.length) {
+        final current = currentQueue[playingTrackIndex];
+        _recommendationService.logActivity(
+          current,
+          'play',
+          positionMs: position.inMilliseconds,
+        );
       }
-    });
+    }
+  });
 
-    _processingStateSub = audioPlayer.processingStateStream.listen((processingState) {
-      if (processingState == ProcessingState.completed) {
-        if (isLoggedIn && _lastTrack != null) {
-          _recommendationService.logActivity(_lastTrack!, 'complete');
-          _lastTrack = null;
-          _lastTrackProgress = 0.0;
-          updateRecommendationShelves();
-        }
-      }
-    });
+  _durationSub = audioPlayer.durationStream.listen((duration) {
+    _currentDuration = duration;
+  });
 
-    audioPlayer.currentIndexStream.listen((index) {
-      if (index != null && currentQueue.isNotEmpty && index < currentQueue.length) {
-        final nextTrack = currentQueue[index];
+  _playerStateSub = audioPlayer.playerStateStream.listen((state) {
+    isPlaying = state.playing;
+    notifyListeners();
 
-        // Track skips vs completions on transition
-        if (isLoggedIn && _lastTrack != null && _lastTrack!.id != nextTrack.id) {
-          if (_lastTrackProgress >= 0.95) {
-            _recommendationService.logActivity(_lastTrack!, 'complete');
-          } else {
-            _recommendationService.logActivity(_lastTrack!, 'skip', positionMs: audioPlayer.position.inMilliseconds);
-          }
-        }
+    if (!state.playing) {
+      _persistPosition(audioPlayer.position.inMilliseconds);
+    }
+  });
 
-        playingTrackIndex = index;
-        _lastTrack = nextTrack;
+  _processingStateSub =
+      audioPlayer.processingStateStream.listen((processingState) {
+    if (processingState == ProcessingState.completed) {
+      if (isLoggedIn && _lastTrack != null) {
+        _recommendationService.logActivity(_lastTrack!, 'complete');
+        _lastTrack = null;
         _lastTrackProgress = 0.0;
-        notifyListeners();
-        _persistPlaybackState();
-        
-        if (isLoggedIn) {
-          _recommendationService.logActivity(nextTrack, 'play');
-          updateRecommendationShelves();
-        }
-        
-        if (nextTrack.youtubeId != null) {
-          fetchRecommendations(nextTrack.youtubeId!);
+      }
+    }
+  });
+
+  audioPlayer.currentIndexStream.listen((index) {
+    if (index != null &&
+        currentQueue.isNotEmpty &&
+        index < currentQueue.length) {
+      final nextTrack = currentQueue[index];
+
+      if (isLoggedIn &&
+          _lastTrack != null &&
+          _lastTrack!.id != nextTrack.id) {
+        if (_lastTrackProgress >= 0.95) {
+          _recommendationService.logActivity(_lastTrack!, 'complete');
+        } else {
+          _recommendationService.logActivity(
+            _lastTrack!,
+            'skip',
+            positionMs: audioPlayer.position.inMilliseconds,
+          );
         }
       }
-    });
-  }
 
+      playingTrackIndex = index;
+      _lastTrack = nextTrack;
+      _lastTrackProgress = 0.0;
+      notifyListeners();
+      _persistPlaybackState();
 
+      if (isLoggedIn) {
+        _recommendationService.logActivity(nextTrack, 'play');
+      }
+    }
+  });
+}
 
   Future<void> loadSavedTracks() async {
     try {
@@ -466,12 +477,23 @@ class AppState extends ChangeNotifier {
     }
     return currentQueue[playingTrackIndex];
   }
-  
+
   void changeTab(int index) {
-    currentTab = index;
-    notifyListeners();
+  currentTab = index;
+  notifyListeners();
+
+  if (index == 0) {
+    if (isLoggedIn) {
+      updateRecommendationShelves();
+    }
+
+    final track = currentTrack;
+    if (track.youtubeId != null) {
+      fetchRecommendations(track.youtubeId!);
+    }
   }
-  
+}
+
   void updateSearch(String query) {
     searchQuery = query;
     notifyListeners();
@@ -699,56 +721,67 @@ class AppState extends ChangeNotifier {
     return [];
   }
 
-  Future<void> fetchRecommendations(String songId) async {
-    if (kIsWeb) return;
-    isLoadingRecommendations = true;
-    recommendedTracks = [];
-    notifyListeners();
-    try {
-      final res = await _jio.search.dio.get(
-        "/",
-        queryParameters: {
-          '__call': 'reco.getreco',
-          'pid': songId,
-          'api_version': 4,
-          '_format': 'json',
-          '_marker': '0',
-          'ctx': 'wap6dot0',
-        },
-      );
-      
-      var data = res.data;
-      if (data is String) {
-        data = jsonDecode(data);
-      }
-      
-      if (data is List && data.isNotEmpty) {
-        final List<Track> tracks = [];
-        final patterns = ['waves', 'vinyl', 'spheres', 'grid'];
-        final random = math.Random();
-        
-        for (var item in data) {
-          try {
-            final song = SongResponse.fromJson(item as Map<String, dynamic>);
-            
-            String? streamUrl;
-            if (song.downloadUrl != null && song.downloadUrl!.isNotEmpty) {
-              streamUrl = song.downloadUrl!.last.link;
-            }
-            if (streamUrl == null) continue;
-            
-            String? imageUrl;
-            if (song.image != null && song.image!.isNotEmpty) {
-              imageUrl = song.image!.last.link;
-            }
-            
-            String artistName = song.primaryArtists.isNotEmpty ? song.primaryArtists : 'Unknown Artist';
-            int durationSeconds = 0;
-            try {
-              durationSeconds = int.parse(song.duration);
-            } catch (_) {}
+Future<void> fetchRecommendations(String songId) async {
+  if (kIsWeb) return;
 
-            tracks.add(Track(
+  final requestId = ++_recommendationRequestId;
+  isLoadingRecommendations = true;
+  notifyListeners();
+
+  try {
+    final res = await _jio.search.dio.get(
+      "/",
+      queryParameters: {
+        '__call': 'reco.getreco',
+        'pid': songId,
+        'api_version': 4,
+        '_format': 'json',
+        '_marker': '0',
+        'ctx': 'wap6dot0',
+      },
+    );
+
+    if (requestId != _recommendationRequestId) return;
+
+    var data = res.data;
+    if (data is String) {
+      data = jsonDecode(data);
+    }
+
+    if (data is List && data.isNotEmpty) {
+      final List<Track> tracks = [];
+      final patterns = ['waves', 'vinyl', 'spheres', 'grid'];
+      final random = math.Random();
+
+      for (var item in data) {
+        try {
+          final song = SongResponse.fromJson(
+            item as Map<String, dynamic>,
+          );
+
+          String? streamUrl;
+          if (song.downloadUrl != null &&
+              song.downloadUrl!.isNotEmpty) {
+            streamUrl = song.downloadUrl!.last.link;
+          }
+          if (streamUrl == null) continue;
+
+          String? imageUrl;
+          if (song.image != null && song.image!.isNotEmpty) {
+            imageUrl = song.image!.last.link;
+          }
+
+          final artistName = song.primaryArtists.isNotEmpty
+              ? song.primaryArtists
+              : 'Unknown Artist';
+
+          int durationSeconds = 0;
+          try {
+            durationSeconds = int.parse(song.duration);
+          } catch (_) {}
+
+          tracks.add(
+            Track(
               id: _generateStableId(song.id),
               title: song.name ?? 'Unknown',
               artist: artistName,
@@ -759,21 +792,29 @@ class AppState extends ChangeNotifier {
               isImported: false,
               uri: streamUrl,
               thumbnailUrl: imageUrl,
-              youtubeId: song.id, // Save raw JioSaavn ID
-            ));
-          } catch (e) {
-            print("Error parsing recommended song: $e");
-          }
+              youtubeId: song.id,
+            ),
+          );
+        } catch (e) {
+          print("Error parsing recommended song: $e");
         }
+      }
+
+      if (requestId == _recommendationRequestId &&
+          tracks.isNotEmpty) {
         recommendedTracks = tracks;
       }
-    } catch (e) {
-      print("Error fetching recommendations: $e");
-    } finally {
+    }
+  } catch (e) {
+    print("Error fetching recommendations: $e");
+  } finally {
+    if (requestId == _recommendationRequestId) {
       isLoadingRecommendations = false;
       notifyListeners();
     }
   }
+}
+
 
   Future<List<Track>> getRecommendationsForSong(String songId) async {
     if (kIsWeb) return [];
