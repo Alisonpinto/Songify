@@ -13,18 +13,8 @@ import '../widgets/music_player_flip_card.dart';
 class NowPlayingScreen extends StatelessWidget {
   const NowPlayingScreen({super.key});
 
-  int _getTotalSeconds(String durationStr) {
-    List<String> parts = durationStr.split(':');
-    if (parts.length == 2) {
-      return (int.tryParse(parts[0]) ?? 0) * 60 + (int.tryParse(parts[1]) ?? 0);
-    } else if (parts.length == 3) {
-      return (int.tryParse(parts[0]) ?? 0) * 3600 + (int.tryParse(parts[1]) ?? 0) * 60 + (int.tryParse(parts[2]) ?? 0);
-    }
-    return 180;
-  }
-
   List<LyricLine> _getLyricsForTrack(Track track) {
-    final totalSec = _getTotalSeconds(track.duration);
+    final totalSec = track.durationInSeconds;
     final quarter = totalSec / 4;
     return [
       LyricLine(
@@ -60,8 +50,7 @@ class NowPlayingScreen extends StatelessWidget {
     ];
   }
 
-  String _formatDuration(double progress, String totalDurationStr) {
-    int totalSeconds = _getTotalSeconds(totalDurationStr);
+  String _formatDuration(double progress, int totalSeconds) {
     int elapsed = (progress * totalSeconds).toInt();
     int m = elapsed ~/ 60;
     int s = elapsed % 60;
@@ -113,7 +102,7 @@ class NowPlayingScreen extends StatelessWidget {
                       builder: (context, constraints) {
                         final cardWidth = math.min(constraints.maxWidth, 360.0);
                         final cardHeight = math.min(constraints.maxHeight, 420.0);
-                        final totalSec = _getTotalSeconds(track.duration);
+                        final totalSec = track.durationInSeconds;
                         final currentSec = (state.trackProgress * totalSec).toInt();
 
                         return Center(
@@ -224,7 +213,7 @@ class NowPlayingScreen extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            _formatDuration(state.trackProgress, track.duration),
+                            _formatDuration(state.trackProgress, track.durationInSeconds),
                             style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
                           ),
                           Text(
@@ -257,19 +246,19 @@ class NowPlayingScreen extends StatelessWidget {
                         icon: const Icon(Icons.skip_previous_rounded, color: AppTheme.textPrimary),
                         onPressed: () => state.prevTrack(),
                       ),
-                      GestureDetector(
-                        onTap: () => state.togglePlayPause(),
-                        child: Container(
+                      Material(
+                        type: MaterialType.circle,
+                        color: isPlaying ? AppTheme.primaryYellow : AppTheme.darkCard,
+                        child: SizedBox(
                           width: 72,
                           height: 72,
-                          decoration: BoxDecoration(
-                            color: isPlaying ? AppTheme.primaryYellow : AppTheme.darkCard,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                            color: isPlaying ? Colors.black : AppTheme.textPrimary,
-                            size: 40,
+                          child: IconButton(
+                            onPressed: () => state.togglePlayPause(),
+                            icon: Icon(
+                              isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                              color: isPlaying ? Colors.black : AppTheme.textPrimary,
+                              size: 40,
+                            ),
                           ),
                         ),
                       ),
