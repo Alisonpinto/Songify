@@ -12,6 +12,9 @@ Your contributions, whether code, design, documentation, ideas, or bug reports, 
 <a href="https://github.com/abhishekkulbainur">
   <img src="https://github.com/abhishekkulbainur.png?size=100" width="80" alt="Abhishek Kulbainur"/>
 </a>
+<a href="https://github.com/yukiattano">
+  <img src="https://github.com/yukiattano.png?size=100" width="80" alt="Yuki Attano"/>
+</a>
 
 ---
 
