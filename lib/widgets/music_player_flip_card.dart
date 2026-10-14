@@ -1,6 +1,10 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:songify_flutter/widgets/flip_card/action_pill.dart';
+import 'package:songify_flutter/widgets/flip_card/flip_card_front.dart';
+import 'package:songify_flutter/widgets/flip_card/soundwave.dart';
+import 'package:songify_flutter/widgets/flip_card/spectrum_bars.dart';
 
 /// Represents a single synchronized lyric line with an associated timestamp.
 class LyricLine {
@@ -80,8 +84,7 @@ class MusicPlayerFlipCard extends StatefulWidget {
   State<MusicPlayerFlipCard> createState() => _MusicPlayerFlipCardState();
 }
 
-class _MusicPlayerFlipCardState extends State<MusicPlayerFlipCard>
-    with TickerProviderStateMixin {
+class _MusicPlayerFlipCardState extends State<MusicPlayerFlipCard> with TickerProviderStateMixin {
   late final AnimationController _flipController;
   late final AnimationController _waveController;
   late final AnimationController _vinylController;
@@ -207,7 +210,7 @@ class _MusicPlayerFlipCardState extends State<MusicPlayerFlipCard>
   @override
   Widget build(BuildContext context) {
     final effectiveRadius = widget.borderRadius ?? BorderRadius.circular(24.0);
-    final secondary = widget.secondaryColor ?? widget.accentColor.withOpacity(0.7);
+    final secondary = widget.secondaryColor ?? widget.accentColor.withValues(alpha: 0.7);
 
     return MouseRegion(
       onHover: _onPointerHover,
@@ -246,13 +249,13 @@ class _MusicPlayerFlipCardState extends State<MusicPlayerFlipCard>
                           borderRadius: effectiveRadius,
                           boxShadow: [
                             BoxShadow(
-                              color: widget.accentColor.withOpacity(widget.isPlaying ? 0.25 : 0.08),
+                              color: widget.accentColor.withValues(alpha: widget.isPlaying ? 0.25 : 0.08),
                               blurRadius: 36,
                               spreadRadius: 4,
                               offset: const Offset(0, 14),
                             ),
                             BoxShadow(
-                              color: secondary.withOpacity(widget.isPlaying ? 0.15 : 0.04),
+                              color: secondary.withValues(alpha: widget.isPlaying ? 0.15 : 0.04),
                               blurRadius: 50,
                               spreadRadius: 6,
                               offset: const Offset(0, 20),
@@ -308,150 +311,55 @@ class _MusicPlayerFlipCardState extends State<MusicPlayerFlipCard>
   }
 
   Widget _buildFrontFace(BuildContext context, BorderRadius radius) {
-    return Container(
-      decoration: BoxDecoration(
+    Widget cover;
+
+    // Base Artwork
+    if (widget.coverArt != null) {
+      cover = widget.coverArt!;
+    } else if (widget.coverImageUrl != null && widget.coverImageUrl!.isNotEmpty) {
+      cover = Image.network(
+        widget.coverImageUrl!,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _buildFallbackArtwork(),
+      );
+    } else {
+      cover = ColoredBox(
         color: widget.backgroundColor,
-        borderRadius: radius,
-        border: Border.all(
-          color: widget.accentColor.withOpacity(0.35),
-          width: 1.5,
-        ),
+        child: _buildFallbackArtwork(),
+      );
+    }
+
+    Widget soundwaves = SizedBox(
+      height: 32,
+      width: double.infinity,
+      child: Soundwave(
+        phase: _waveController.value * 2 * math.pi,
+        color: widget.accentColor,
+        playing: widget.isPlaying,
       ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Base Artwork
-          if (widget.coverArt != null)
-            widget.coverArt!
-          else if (widget.coverImageUrl != null && widget.coverImageUrl!.isNotEmpty)
-            Image.network(
-              widget.coverImageUrl!,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => _buildFallbackArtwork(),
-            )
-          else
-            _buildFallbackArtwork(),
+    );
 
-          // Glossy Specular Sheen Overlay
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Colors.white.withOpacity(0.18),
-                    Colors.white.withOpacity(0.02),
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.65),
-                  ],
-                  stops: const [0.0, 0.25, 0.55, 1.0],
-                ),
-              ),
-            ),
-          ),
+    Widget bars = SpectrumBars(
+      playing: widget.isPlaying,
+      progress: _waveController.value,
+      color: widget.accentColor,
+    );
 
-          // Header Overlay
-          Positioned(
-            top: 16,
-            left: 16,
-            right: 16,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        widget.title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.3,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        widget.artist,
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.75),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                if (widget.showSpectrumBars)
-                  _SpectrumBarsWidget(
-                    isPlaying: widget.isPlaying,
-                    progress: _waveController.value,
-                    color: widget.accentColor,
-                  ),
-              ],
-            ),
-          ),
-
-          // Bottom Section
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.85),
-                  ],
-                ),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (widget.showWaveform)
-                    SizedBox(
-                      height: 32,
-                      width: double.infinity,
-                      child: CustomPaint(
-                        painter: _SoundwavePainter(
-                          phase: _waveController.value * 2 * math.pi,
-                          accentColor: widget.accentColor,
-                          isPlaying: widget.isPlaying,
-                        ),
-                      ),
-                    ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Flexible(
-                        child: _buildTrackTimePill(),
-                      ),
-                      const SizedBox(width: 8),
-                      _buildActionPill(
-                        icon: Icons.lyrics_outlined,
-                        label: widget.tapForLyricsLabel,
-                        accentColor: widget.accentColor,
-                        onTap: _toggleFlip,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+    return FlipCardFront(
+      title: widget.title,
+      artist: widget.artist,
+      cover: cover,
+      spectrumBars: widget.showSpectrumBars ? bars : null,
+      soundwaves: widget.showWaveform ? soundwaves : null,
+      color: widget.accentColor,
+      borderRadius: radius,
+      currentPosition: widget.currentPosition,
+      totalDuration: widget.totalDuration,
+      actionPill: ActionPill(
+        icon: Icons.lyrics_outlined,
+        label: widget.tapForLyricsLabel,
+        color: widget.accentColor,
+        onPressed: _toggleFlip,
       ),
     );
   }
@@ -459,12 +367,12 @@ class _MusicPlayerFlipCardState extends State<MusicPlayerFlipCard>
   Widget _buildBackFace(BuildContext context, BorderRadius radius) {
     final activeIndex = _calculateActiveLyricIndex();
 
-    return Container(
+    return DecoratedBox(
       decoration: BoxDecoration(
         color: widget.backgroundColor,
         borderRadius: radius,
         border: Border.all(
-          color: widget.accentColor.withOpacity(0.45),
+          color: widget.accentColor.withValues(alpha: 0.45),
           width: 1.5,
         ),
       ),
@@ -481,7 +389,7 @@ class _MusicPlayerFlipCardState extends State<MusicPlayerFlipCard>
             child: BackdropFilter(
               filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
               child: Container(
-                color: widget.backgroundColor.withOpacity(0.85),
+                color: widget.backgroundColor.withValues(alpha: 0.85),
               ),
             ),
           ),
@@ -510,7 +418,7 @@ class _MusicPlayerFlipCardState extends State<MusicPlayerFlipCard>
                           Text(
                             widget.artist,
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.60),
+                              color: Colors.white.withValues(alpha: 0.60),
                               fontSize: 12,
                               fontWeight: FontWeight.w500,
                             ),
@@ -521,17 +429,17 @@ class _MusicPlayerFlipCardState extends State<MusicPlayerFlipCard>
                       ),
                     ),
                     const SizedBox(width: 8),
-                    _buildActionPill(
+                    ActionPill(
                       icon: Icons.album_outlined,
                       label: widget.tapForCoverLabel,
-                      accentColor: widget.accentColor,
-                      onTap: _toggleFlip,
+                      color: widget.accentColor,
+                      onPressed: _toggleFlip,
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
                 Divider(
-                  color: Colors.white.withOpacity(0.12),
+                  color: Colors.white.withValues(alpha: 0.12),
                   height: 1,
                 ),
                 const SizedBox(height: 6),
@@ -541,7 +449,7 @@ class _MusicPlayerFlipCardState extends State<MusicPlayerFlipCard>
                           child: Text(
                             'No synchronized lyrics available',
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.45),
+                              color: Colors.white.withValues(alpha: 0.45),
                               fontSize: 13,
                             ),
                           ),
@@ -569,13 +477,11 @@ class _MusicPlayerFlipCardState extends State<MusicPlayerFlipCard>
                                 ),
                                 margin: const EdgeInsets.symmetric(vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: isActive
-                                      ? widget.accentColor.withOpacity(0.15)
-                                      : Colors.transparent,
+                                  color: isActive ? widget.accentColor.withValues(alpha: 0.15) : Colors.transparent,
                                   borderRadius: BorderRadius.circular(8),
                                   border: isActive
                                       ? Border.all(
-                                          color: widget.accentColor.withOpacity(0.40),
+                                          color: widget.accentColor.withValues(alpha: 0.40),
                                           width: 1,
                                         )
                                       : null,
@@ -589,17 +495,15 @@ class _MusicPlayerFlipCardState extends State<MusicPlayerFlipCard>
                                         color: isActive
                                             ? Colors.white
                                             : isPast
-                                                ? Colors.white.withOpacity(0.50)
-                                                : Colors.white.withOpacity(0.28),
+                                                ? Colors.white.withValues(alpha: 0.50)
+                                                : Colors.white.withValues(alpha: 0.28),
                                         fontSize: isActive ? 15 : 13,
-                                        fontWeight: isActive
-                                            ? FontWeight.w700
-                                            : FontWeight.w400,
+                                        fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
                                         height: 1.3,
                                         shadows: isActive
                                             ? [
                                                 Shadow(
-                                                  color: widget.accentColor.withOpacity(0.70),
+                                                  color: widget.accentColor.withValues(alpha: 0.70),
                                                   blurRadius: 10,
                                                 )
                                               ]
@@ -613,8 +517,8 @@ class _MusicPlayerFlipCardState extends State<MusicPlayerFlipCard>
                                           line.translation!,
                                           style: TextStyle(
                                             color: isActive
-                                                ? widget.accentColor.withOpacity(0.90)
-                                                : Colors.white.withOpacity(0.35),
+                                                ? widget.accentColor.withValues(alpha: 0.90)
+                                                : Colors.white.withValues(alpha: 0.35),
                                             fontSize: 11,
                                             fontWeight: FontWeight.w400,
                                           ),
@@ -631,88 +535,16 @@ class _MusicPlayerFlipCardState extends State<MusicPlayerFlipCard>
                   SizedBox(
                     height: 16,
                     width: double.infinity,
-                    child: CustomPaint(
-                      painter: _SoundwavePainter(
-                        phase: _waveController.value * 2 * math.pi,
-                        accentColor: widget.accentColor,
-                        isPlaying: widget.isPlaying,
-                      ),
+                    child: Soundwave(
+                      phase: _waveController.value * 2 * math.pi,
+                      color: widget.accentColor,
+                      playing: widget.isPlaying,
                     ),
                   ),
               ],
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildTrackTimePill() {
-    final curMin = widget.currentPosition.inMinutes;
-    final curSec = widget.currentPosition.inSeconds % 60;
-    final totMin = widget.totalDuration.inMinutes;
-    final totSec = widget.totalDuration.inSeconds % 60;
-    final timeStr =
-        '${curMin.toString().padLeft(2, '0')}:${curSec.toString().padLeft(2, '0')} / ${totMin.toString().padLeft(2, '0')}:${totSec.toString().padLeft(2, '0')}';
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.55),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.15),
-          width: 0.8,
-        ),
-      ),
-      child: Text(
-        timeStr,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: Colors.white.withOpacity(0.80),
-          fontSize: 10,
-          fontFeatures: const [FontFeature.tabularFigures()],
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionPill({
-    required IconData icon,
-    required String label,
-    required Color accentColor,
-    VoidCallback? onTap,
-  }) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: accentColor.withOpacity(0.18),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: accentColor.withOpacity(0.45),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 12, color: Colors.white),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -724,7 +556,7 @@ class _MusicPlayerFlipCardState extends State<MusicPlayerFlipCard>
           center: Alignment.center,
           radius: 1.1,
           colors: [
-            widget.accentColor.withOpacity(0.45),
+            widget.accentColor.withValues(alpha: 0.45),
             widget.backgroundColor,
             Colors.black,
           ],
@@ -734,123 +566,10 @@ class _MusicPlayerFlipCardState extends State<MusicPlayerFlipCard>
         child: Icon(
           Icons.music_note_rounded,
           size: 64,
-          color: widget.accentColor.withOpacity(0.60),
+          color: widget.accentColor.withValues(alpha: 0.60),
         ),
       ),
     );
-  }
-}
-
-class _SpectrumBarsWidget extends StatelessWidget {
-  final bool isPlaying;
-  final double progress;
-  final Color color;
-
-  const _SpectrumBarsWidget({
-    required this.isPlaying,
-    required this.progress,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: List.generate(4, (i) {
-        final factor = isPlaying
-            ? 0.30 + 0.70 * ((math.sin(progress * 2 * math.pi + (i * 1.3)) + 1) / 2)
-            : 0.20;
-        final barHeight = 5.0 + (factor * 14.0);
-
-        return Container(
-          width: 3.0,
-          height: barHeight,
-          margin: const EdgeInsets.symmetric(horizontal: 1.2),
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(2),
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(0.60),
-                blurRadius: 4,
-              ),
-            ],
-          ),
-        );
-      }),
-    );
-  }
-}
-
-class _SoundwavePainter extends CustomPainter {
-  final double phase;
-  final Color accentColor;
-  final bool isPlaying;
-
-  _SoundwavePainter({
-    required this.phase,
-    required this.accentColor,
-    required this.isPlaying,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final midY = size.height / 2;
-    final path = Path();
-    final fillPath = Path();
-
-    path.moveTo(0, midY);
-    fillPath.moveTo(0, size.height);
-    fillPath.lineTo(0, midY);
-
-    final amplitude = isPlaying ? size.height * 0.38 : size.height * 0.08;
-
-    for (double x = 0; x <= size.width; x += 3) {
-      final normalizedX = x / size.width;
-      final envelope = math.sin(normalizedX * math.pi);
-      final y = midY +
-          math.sin((normalizedX * 3.5 * math.pi) + phase) *
-              amplitude *
-              envelope +
-          math.cos((normalizedX * 7.0 * math.pi) - (phase * 1.5)) *
-              (amplitude * 0.35) *
-              envelope;
-
-      path.lineTo(x, y);
-      fillPath.lineTo(x, y);
-    }
-
-    fillPath.lineTo(size.width, size.height);
-    fillPath.close();
-
-    final fillPaint = Paint()
-      ..shader = ui.Gradient.linear(
-        Offset(0, midY),
-        Offset(0, size.height),
-        [
-          accentColor.withOpacity(isPlaying ? 0.35 : 0.08),
-          Colors.transparent,
-        ],
-      )
-      ..style = PaintingStyle.fill;
-
-    canvas.drawPath(fillPath, fillPaint);
-
-    final strokePaint = Paint()
-      ..color = isPlaying ? accentColor : accentColor.withOpacity(0.40)
-      ..strokeWidth = 1.8
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawPath(path, strokePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _SoundwavePainter oldDelegate) {
-    return oldDelegate.phase != phase ||
-        oldDelegate.isPlaying != isPlaying ||
-        oldDelegate.accentColor != accentColor;
   }
 }
 
@@ -899,7 +618,7 @@ class _VinylDiscPainter extends CustomPainter {
     canvas.drawCircle(center, radius, discPaint);
 
     final groovePaint = Paint()
-      ..color = Colors.white.withOpacity(0.06)
+      ..color = Colors.white.withValues(alpha: 0.06)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
 
@@ -914,7 +633,7 @@ class _VinylDiscPainter extends CustomPainter {
         labelRadius,
         [
           accentColor,
-          accentColor.withOpacity(0.70),
+          accentColor.withValues(alpha: 0.70),
           const Color(0xFF141820),
         ],
         const [0.0, 0.70, 1.0],
@@ -928,7 +647,7 @@ class _VinylDiscPainter extends CustomPainter {
     canvas.drawCircle(center, radius * 0.07, holePaint);
 
     final rimPaint = Paint()
-      ..color = Colors.white.withOpacity(0.15)
+      ..color = Colors.white.withValues(alpha: 0.15)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
     canvas.drawCircle(center, radius - 1, rimPaint);

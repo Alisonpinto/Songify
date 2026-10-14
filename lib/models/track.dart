@@ -5,6 +5,7 @@ class Track {
   final String title;
   final String artist;
   final String duration;
+  late final int durationInSeconds = _parseDurationSeconds(duration);
   final String pattern;
   final Color primaryColor;
   final Color secondaryColor;
@@ -61,5 +62,15 @@ class Track {
       youtubeId: json['youtubeId']?.toString(),
       thumbnailUrl: json['thumbnailUrl']?.toString(),
     );
+  }
+
+  int _parseDurationSeconds(String durationStr) {
+    List<String> parts = durationStr.split(':');
+    if (parts.length == 2) {
+      return (int.tryParse(parts[0]) ?? 0) * 60 + (int.tryParse(parts[1]) ?? 0);
+    } else if (parts.length == 3) {
+      return (int.tryParse(parts[0]) ?? 0) * 3600 + (int.tryParse(parts[1]) ?? 0) * 60 + (int.tryParse(parts[2]) ?? 0);
+    }
+    return 180;
   }
 }

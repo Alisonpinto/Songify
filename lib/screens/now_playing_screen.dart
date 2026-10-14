@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'package:provider/provider.dart';
+import 'package:songify_flutter/widgets/buttons/minimize_icon_button.dart';
+import 'package:songify_flutter/widgets/buttons/recommendation_icon_button.dart';
 import '../providers/app_state.dart';
 import '../models/track.dart';
 import '../theme.dart';
@@ -11,20 +13,8 @@ import '../widgets/music_player_flip_card.dart';
 class NowPlayingScreen extends StatelessWidget {
   const NowPlayingScreen({super.key});
 
-  int _getTotalSeconds(String durationStr) {
-    List<String> parts = durationStr.split(':');
-    if (parts.length == 2) {
-      return (int.tryParse(parts[0]) ?? 0) * 60 + (int.tryParse(parts[1]) ?? 0);
-    } else if (parts.length == 3) {
-      return (int.tryParse(parts[0]) ?? 0) * 3600 +
-          (int.tryParse(parts[1]) ?? 0) * 60 +
-          (int.tryParse(parts[2]) ?? 0);
-    }
-    return 180;
-  }
-
   List<LyricLine> _getLyricsForTrack(Track track) {
-    final totalSec = _getTotalSeconds(track.duration);
+    final totalSec = track.durationInSeconds;
     final quarter = totalSec / 4;
     return [
       LyricLine(
@@ -60,8 +50,7 @@ class NowPlayingScreen extends StatelessWidget {
     ];
   }
 
-  String _formatDuration(double progress, String totalDurationStr) {
-    int totalSeconds = _getTotalSeconds(totalDurationStr);
+  String _formatDuration(double progress, int totalSeconds) {
     int elapsed = (progress * totalSeconds).toInt();
     int m = elapsed ~/ 60;
     int s = elapsed % 60;
@@ -86,220 +75,213 @@ class NowPlayingScreen extends StatelessWidget {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textPrimary, size: 32),
+                      MinimizeIconButton(
                         onPressed: () => Navigator.pop(context),
                       ),
-                    const Text(
-                      "Now Playing",
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.textSecondary,
-                        letterSpacing: 1.5,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.auto_awesome_rounded, color: AppTheme.primaryYellow),
-                      tooltip: "Recommendations",
-                      onPressed: () => _showRecommendationsBottomSheet(context, state),
-                    ),
-                  ],
-                ),
-              ),
-
-              // 3D Music Player Flip Card (Cover & Lyrics)
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final cardWidth = math.min(constraints.maxWidth, 360.0);
-                      final cardHeight = math.min(constraints.maxHeight, 420.0);
-                      final totalSec = _getTotalSeconds(track.duration);
-                      final currentSec = (state.trackProgress * totalSec).toInt();
-
-                      return Center(
-                        child: MusicPlayerFlipCard(
-                          title: track.title,
-                          artist: track.artist,
-                          coverImageUrl: track.thumbnailUrl,
-                          isPlaying: isPlaying,
-                          accentColor: AppTheme.primaryYellow,
-                          secondaryColor: track.secondaryColor,
-                          width: cardWidth,
-                          height: cardHeight,
-                          currentPosition: Duration(seconds: currentSec),
-                          totalDuration: Duration(seconds: totalSec),
-                          lyrics: _getLyricsForTrack(track),
-                          onSeekLyric: (seekPos) {
-                            if (totalSec > 0) {
-                              state.seek((seekPos.inSeconds / totalSec).clamp(0.0, 1.0));
-                            }
-                          },
+                      const Text(
+                        "Now Playing",
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textSecondary,
+                          letterSpacing: 1.5,
                         ),
-                      );
-                    },
+                      ),
+                      RecommendationIconButton(
+                        onPressed: () => _showRecommendationsBottomSheet(context, state),
+                      ),
+                    ],
                   ),
                 ),
-              ),
 
-              // Title and Favorite
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            track.title,
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.textPrimary,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                // 3D Music Player Flip Card (Cover & Lyrics)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final cardWidth = math.min(constraints.maxWidth, 360.0);
+                        final cardHeight = math.min(constraints.maxHeight, 420.0);
+                        final totalSec = track.durationInSeconds;
+                        final currentSec = (state.trackProgress * totalSec).toInt();
+
+                        return Center(
+                          child: MusicPlayerFlipCard(
+                            title: track.title,
+                            artist: track.artist,
+                            coverImageUrl: track.thumbnailUrl,
+                            isPlaying: isPlaying,
+                            accentColor: AppTheme.primaryYellow,
+                            secondaryColor: track.secondaryColor,
+                            width: cardWidth,
+                            height: cardHeight,
+                            currentPosition: Duration(seconds: currentSec),
+                            totalDuration: Duration(seconds: totalSec),
+                            lyrics: _getLyricsForTrack(track),
+                            onSeekLyric: (seekPos) {
+                              if (totalSec > 0) {
+                                state.seek((seekPos.inSeconds / totalSec).clamp(0.0, 1.0));
+                              }
+                            },
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            track.artist,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              color: AppTheme.textSecondary,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+
+                // Title and Favorite
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              track.title,
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                            const SizedBox(height: 4),
+                            Text(
+                              track.artist,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: AppTheme.textSecondary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          IconButton(
+                            iconSize: 28,
+                            icon: Icon(
+                              state.isLiked(track.id) ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                              color: state.isLiked(track.id) ? AppTheme.primaryYellow : AppTheme.textSecondary,
+                            ),
+                            onPressed: () {
+                              state.toggleLikeTrack(track);
+                            },
+                          ),
+                          IconButton(
+                            iconSize: 28,
+                            icon: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.textSecondary),
+                            onPressed: () {
+                              showAddToAlbumSheet(context, track, state);
+                            },
                           ),
                         ],
                       ),
-                    ),
-                    Row(
-                      children: [
-                        IconButton(
-                          iconSize: 28,
-                          icon: Icon(
-                            state.isLiked(track.id)
-                                ? Icons.favorite_rounded
-                                : Icons.favorite_border_rounded,
-                            color: state.isLiked(track.id)
-                                ? AppTheme.primaryYellow
-                                : AppTheme.textSecondary,
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                // Progress Bar
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Column(
+                    children: [
+                      SliderTheme(
+                        data: SliderThemeData(
+                          trackHeight: 4,
+                          activeTrackColor: AppTheme.primaryYellow,
+                          inactiveTrackColor: AppTheme.darkCard,
+                          thumbColor: AppTheme.primaryYellow,
+                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                          overlayColor: AppTheme.primaryYellow.withValues(alpha: 0.2),
+                        ),
+                        child: Slider(
+                          value: state.trackProgress.clamp(0.0, 1.0),
+                          onChanged: (value) => state.seek(value),
+                        ),
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            _formatDuration(state.trackProgress, track.durationInSeconds),
+                            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
                           ),
-                          onPressed: () {
-                            state.toggleLikeTrack(track);
-                          },
-                        ),
-                        IconButton(
-                          iconSize: 28,
-                          icon: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.textSecondary),
-                          onPressed: () {
-                            showAddToAlbumSheet(context, track, state);
-                          },
-                        ),
-                      ],
-                    ),
-                  ],
+                          Text(
+                            track.duration,
+                            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
 
-              const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
-              // Progress Bar
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Column(
-                  children: [
-                    SliderTheme(
-                      data: SliderThemeData(
-                        trackHeight: 4,
-                        activeTrackColor: AppTheme.primaryYellow,
-                        inactiveTrackColor: AppTheme.darkCard,
-                        thumbColor: AppTheme.primaryYellow,
-                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                        overlayColor: AppTheme.primaryYellow.withOpacity(0.2),
-                      ),
-                      child: Slider(
-                        value: state.trackProgress.clamp(0.0, 1.0),
-                        onChanged: (value) => state.seek(value),
-                      ),
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          _formatDuration(state.trackProgress, track.duration),
-                          style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                // Controls
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          Icons.shuffle_rounded,
+                          color: state.isShuffle ? AppTheme.primaryYellow : AppTheme.textSecondary,
                         ),
-                        Text(
-                          track.duration,
-                          style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                        onPressed: () => state.toggleShuffle(),
+                      ),
+                      IconButton(
+                        iconSize: 40,
+                        icon: const Icon(Icons.skip_previous_rounded, color: AppTheme.textPrimary),
+                        onPressed: () => state.prevTrack(),
+                      ),
+                      Material(
+                        type: MaterialType.circle,
+                        color: isPlaying ? AppTheme.primaryYellow : AppTheme.darkCard,
+                        child: SizedBox(
+                          width: 72,
+                          height: 72,
+                          child: IconButton(
+                            onPressed: () => state.togglePlayPause(),
+                            icon: Icon(
+                              isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                              color: isPlaying ? Colors.black : AppTheme.textPrimary,
+                              size: 40,
+                            ),
+                          ),
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                      IconButton(
+                        iconSize: 40,
+                        icon: const Icon(Icons.skip_next_rounded, color: AppTheme.textPrimary),
+                        onPressed: () => state.nextTrack(),
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          state.isRepeat ? Icons.repeat_one_rounded : Icons.repeat_rounded,
+                          color: state.isRepeat ? AppTheme.primaryYellow : AppTheme.textSecondary,
+                        ),
+                        onPressed: () => state.toggleRepeat(),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Controls
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    IconButton(
-                      icon: Icon(
-                        Icons.shuffle_rounded,
-                        color: state.isShuffle ? AppTheme.primaryYellow : AppTheme.textSecondary,
-                      ),
-                      onPressed: () => state.toggleShuffle(),
-                    ),
-                    IconButton(
-                      iconSize: 40,
-                      icon: const Icon(Icons.skip_previous_rounded, color: AppTheme.textPrimary),
-                      onPressed: () => state.prevTrack(),
-                    ),
-                    GestureDetector(
-                      onTap: () => state.togglePlayPause(),
-                      child: Container(
-                        width: 72,
-                        height: 72,
-                        decoration: BoxDecoration(
-                          color: isPlaying ? AppTheme.primaryYellow : AppTheme.darkCard,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                          color: isPlaying ? Colors.black : AppTheme.textPrimary,
-                          size: 40,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      iconSize: 40,
-                      icon: const Icon(Icons.skip_next_rounded, color: AppTheme.textPrimary),
-                      onPressed: () => state.nextTrack(),
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        state.isRepeat ? Icons.repeat_one_rounded : Icons.repeat_rounded,
-                        color: state.isRepeat ? AppTheme.primaryYellow : AppTheme.textSecondary,
-                      ),
-                      onPressed: () => state.toggleRepeat(),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 32),
-            ],
+                const SizedBox(height: 32),
+              ],
+            ),
           ),
-        ),
-      );
+        );
       },
     );
   }
@@ -470,7 +452,7 @@ class _CircularAlbumCoverState extends State<CircularAlbumCover> with SingleTick
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = math.min(constraints.maxWidth, constraints.maxHeight);
-        
+
         return Center(
           child: RotationTransition(
             turns: _rotationController,
@@ -481,7 +463,7 @@ class _CircularAlbumCoverState extends State<CircularAlbumCover> with SingleTick
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.55),
+                    color: Colors.black.withValues(alpha: 0.55),
                     blurRadius: 20,
                     offset: const Offset(0, 10),
                   ),
@@ -496,7 +478,7 @@ class _CircularAlbumCoverState extends State<CircularAlbumCover> with SingleTick
                       painter: VinylDiscPainter(),
                     ),
                   ),
-                  
+
                   // Album Art Image / Placeholder in the middle
                   Container(
                     width: size * 0.62,
@@ -516,7 +498,7 @@ class _CircularAlbumCoverState extends State<CircularAlbumCover> with SingleTick
                           : _buildPlaceholder(size * 0.62),
                     ),
                   ),
-                  
+
                   // Vinyl Center Spindle / Label Ring
                   Container(
                     width: size * 0.15,
@@ -525,7 +507,7 @@ class _CircularAlbumCoverState extends State<CircularAlbumCover> with SingleTick
                       color: AppTheme.darkBackground,
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: AppTheme.primaryYellow.withOpacity(0.3),
+                        color: AppTheme.primaryYellow.withValues(alpha: 0.3),
                         width: 2,
                       ),
                     ),
@@ -586,12 +568,12 @@ class VinylDiscPainter extends CustomPainter {
         ],
         stops: const [0.0, 0.7, 1.0],
       ).createShader(Rect.fromCircle(center: center, radius: radius));
-    
+
     canvas.drawCircle(center, radius, basePaint);
 
     // Grooves
     final groovePaint = Paint()
-      ..color = Colors.white.withOpacity(0.04)
+      ..color = Colors.white.withValues(alpha: 0.04)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
 
@@ -605,7 +587,7 @@ class VinylDiscPainter extends CustomPainter {
 
     // Outer edge highlights
     final edgePaint = Paint()
-      ..color = Colors.white.withOpacity(0.08)
+      ..color = Colors.white.withValues(alpha: 0.08)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0;
     canvas.drawCircle(center, radius - 1, edgePaint);
@@ -679,7 +661,7 @@ class TonearmPainter extends CustomPainter {
     // 3. Draw headshell at the needle end
     final headOffset = Offset(size.width * 0.3, size.height * 0.85);
     canvas.drawCircle(headOffset, size.width * 0.06, basePaint);
-    
+
     // Draw the cartridge rectangle rotated slightly
     canvas.save();
     canvas.translate(headOffset.dx, headOffset.dy);
