@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:songify_flutter/widgets/flip_card/action_pill.dart';
 import 'package:songify_flutter/widgets/flip_card/flip_card_front.dart';
 import 'package:songify_flutter/widgets/flip_card/soundwave.dart';
 import 'package:songify_flutter/widgets/flip_card/spectrum_bars.dart';
@@ -354,11 +355,11 @@ class _MusicPlayerFlipCardState extends State<MusicPlayerFlipCard> with TickerPr
       borderRadius: radius,
       currentPosition: widget.currentPosition,
       totalDuration: widget.totalDuration,
-      actionPill: _buildActionPill(
+      actionPill: ActionPill(
         icon: Icons.lyrics_outlined,
         label: widget.tapForLyricsLabel,
-        accentColor: widget.accentColor,
-        onTap: _toggleFlip,
+        color: widget.accentColor,
+        onPressed: _toggleFlip,
       ),
     );
   }
@@ -366,7 +367,7 @@ class _MusicPlayerFlipCardState extends State<MusicPlayerFlipCard> with TickerPr
   Widget _buildBackFace(BuildContext context, BorderRadius radius) {
     final activeIndex = _calculateActiveLyricIndex();
 
-    return Container(
+    return DecoratedBox(
       decoration: BoxDecoration(
         color: widget.backgroundColor,
         borderRadius: radius,
@@ -428,11 +429,11 @@ class _MusicPlayerFlipCardState extends State<MusicPlayerFlipCard> with TickerPr
                       ),
                     ),
                     const SizedBox(width: 8),
-                    _buildActionPill(
+                    ActionPill(
                       icon: Icons.album_outlined,
                       label: widget.tapForCoverLabel,
-                      accentColor: widget.accentColor,
-                      onTap: _toggleFlip,
+                      color: widget.accentColor,
+                      onPressed: _toggleFlip,
                     ),
                   ],
                 ),
@@ -544,44 +545,6 @@ class _MusicPlayerFlipCardState extends State<MusicPlayerFlipCard> with TickerPr
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildActionPill({
-    required IconData icon,
-    required String label,
-    required Color accentColor,
-    VoidCallback? onTap,
-  }) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: accentColor.withValues(alpha: 0.18),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: accentColor.withValues(alpha: 0.45),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 12, color: Colors.white),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
